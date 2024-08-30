@@ -1,8 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using NodeTesting.models;
 
-namespace CardCeption
+namespace NodeTesting.models
 {
     public class SpriteManager
     {
@@ -39,7 +38,7 @@ namespace CardCeption
         private float timeElapsed;
         public bool IsLooping = true;
         private float timeToUpdate; //default, you may have to change it
-        public int FramesPerSecond { set { timeToUpdate = (1f / value); } }
+        public int FramesPerSecond { set { timeToUpdate = 1f / value; } }
         public bool IsFinished = false;
         public bool IsReversed = false;
 
