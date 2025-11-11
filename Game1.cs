@@ -77,7 +77,7 @@ namespace NodeTesting
             // TODO: Add your drawing code here
             _spriteBatch.Begin(transformMatrix: camera.Transform());
             player.Draw(Color.White);
-            player.Rect.DrawRect(new Color(255, 0, 0, 128));
+            player.Rect.Draw(new Color(255, 0, 0, 128));
             if (circle.Collides(player.Rect.Rect))
             {
                 circle.Draw(new Color(0, 255, 0, 128));
@@ -87,17 +87,17 @@ namespace NodeTesting
                 circle.Draw(new Color(255, 0, 0, 128));
             }
 
-            if(rectangle.Intersects(player.Rect.Rect))
+            if(rectangle.Intersects(player.Rect))
             {
-                rectangle.DrawRect(new Color(0, 255, 0, 128));
+                rectangle.Draw(new Color(0, 255, 0, 128));
                 MediaPlayer.Play(song);
             }
             else
             {
-                rectangle.DrawRect(new Color(255, 0, 0, 128));
+                rectangle.Draw(new Color(255, 0, 0, 128));
             }
 
-            _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.pos()), new Vector2(10, 10), Color.White);
+            _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
             _spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
             _spriteBatch.End();
 
