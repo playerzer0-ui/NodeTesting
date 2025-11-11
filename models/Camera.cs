@@ -3,6 +3,14 @@
 
 namespace NodeTesting.models
 {
+    /// <summary>
+    /// Represents a 2D camera used to control the view transformation of the game world.
+    /// </summary>
+    /// <remarks>
+    /// The camera allows you to pan, zoom, and rotate the visible area of the game world.
+    /// Use the <see cref="Transform"/> method to obtain the transformation matrix 
+    /// applied during sprite rendering.
+    /// </remarks>
     public class Camera
     {
         private Vector2 position;
@@ -21,6 +29,14 @@ namespace NodeTesting.models
         public float Zoom { get => zoom; set => zoom = value; }
         public float Rotation { get => rotation; set => rotation = value; }
 
+        /// <summary>
+        /// Creates and returns the transformation matrix used by the camera. <br />
+        /// _spriteBatch.Begin(transformMatrix: camera.Transform());
+        /// </summary>
+        /// <returns>
+        /// A <see cref="Matrix"/> that applies translation, rotation, scaling, and origin offset
+        /// in the correct order for rendering the game world from the camera's perspective.
+        /// </returns>
         public Matrix Transform()
         {
             return Matrix.CreateTranslation(new Vector3(-position, 0f)) *

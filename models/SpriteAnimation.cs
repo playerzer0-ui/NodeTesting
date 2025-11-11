@@ -16,6 +16,14 @@ namespace NodeTesting.models
         public int FrameIndex = 0;
         public int frames;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SpriteManager"/> class.
+        /// </summary>
+        /// <param name="Texture">The path to the texture in the Content folder.</param>
+        /// <param name="frames">The total number of frames in the texture.</param>
+        /// <remarks>
+        /// This constructor automatically divides the texture width evenly based on the specified frame count.
+        /// </remarks>
         public SpriteManager(string Texture, int frames)
         {
             this.frames = frames;
@@ -27,12 +35,19 @@ namespace NodeTesting.models
                 Rectangles[i] = new Rectangle(i * width, 0, width, this.Texture.Height);
         }
 
+        /// <summary>
+        /// Draws the current frame of the sprite to the screen.
+        /// </summary>
+        /// <param name="spriteBatch">The <see cref="SpriteBatch"/> used for rendering.</param>
         public void Draw(SpriteBatch spriteBatch)
         {
             spriteBatch.Draw(Texture, Position, Rectangles[FrameIndex], Color, Rotation, Origin, Scale, SpriteEffect, 0f);
         }
     }
 
+    /// <summary>
+    /// Extends <see cref="SpriteManager"/> to add frame-based animation playback.
+    /// </summary>
     public class SpriteAnimation : SpriteManager
     {
         private float timeElapsed;
@@ -42,11 +57,24 @@ namespace NodeTesting.models
         public bool IsFinished = false;
         public bool IsReversed = false;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SpriteAnimation"/> class.
+        /// </summary>
+        /// <param name="Texture">The path to the texture in the Content folder.</param>
+        /// <param name="frames">The total number of frames in the sprite sheet.</param>
+        /// <param name="fps">The desired frames per second for animation playback.</param>
         public SpriteAnimation(string Texture, int frames, int fps) : base(Texture, frames)
         {
             FramesPerSecond = fps;
         }
 
+        /// <summary>
+        /// Updates the animation based on elapsed time, looping or reversing as needed.
+        /// </summary>
+        /// <param name="gameTime">The current <see cref="GameTime"/> instance provided by MonoGame.</param>
+        /// <remarks>
+        /// This method advances the animation to the next frame based on the configured <see cref="FramesPerSecond"/>.
+        /// </remarks>
         public void Update(GameTime gameTime)
         {
             timeElapsed += (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -75,6 +103,13 @@ namespace NodeTesting.models
             }
         }
 
+        /// <summary>
+        /// Updates the animation once without looping behavior.
+        /// </summary>
+        /// <param name="gameTime">The current <see cref="GameTime"/> instance provided by MonoGame.</param>
+        /// <remarks>
+        /// This version of <see cref="Update(GameTime)"/> stops at the final frame instead of looping.
+        /// </remarks>
         public void UpdateOnce(GameTime gameTime)
         {
             timeElapsed += (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -99,11 +134,18 @@ namespace NodeTesting.models
             }
         }
 
+        /// <summary>
+        /// Sets the current animation frame manually.
+        /// </summary>
+        /// <param name="frame">The frame index to switch to.</param>
         public void setFrame(int frame)
         {
             FrameIndex = frame;
         }
 
+        /// <summary>
+        /// Toggles the animation playback direction.
+        /// </summary>
         public void ReverseAnimation()
         {
             IsReversed = !IsReversed;
