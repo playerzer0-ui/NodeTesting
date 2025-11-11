@@ -5,7 +5,7 @@ using System;
 
 namespace NodeTesting.models
 {
-    public class CollisionCircle
+    public class CollisionCircle : ICollider
     {
         private Vector2 center;
         private int radius;
@@ -13,78 +13,80 @@ namespace NodeTesting.models
 
         public CollisionCircle(int x, int y, int radius)
         {
-            this.center = new Vector2(x, y);
+            center = new Vector2(x, y);
             this.radius = radius;
             pixel = new Texture2D(Globals.graphics.GraphicsDevice, 1, 1);
-            pixel.SetData<Color>(new Color[] { Color.White });
+            pixel.SetData(new[] { Color.White });
         }
 
         public Vector2 Center { get => center; set => center = value; }
         public int Radius { get => radius; set => radius = value; }
 
+        public bool Contains(Point target)
+        {
+            float dx = target.X - center.X;
+            float dy = target.Y - center.Y;
+            return (dx * dx + dy * dy) < (radius * radius);
+        }
+
+        public bool Intersects(ICollider other)
+        {
+            switch (other)
+            {
+                case CollisionCircle c:
+                    float distSq = Vector2.DistanceSquared(center, c.Center);
+                    float radiusSum = radius + c.Radius;
+                    return distSq < (radiusSum * radiusSum);
+
+                case CollisionRect r:
+                    return Collides(r.Rect);
+
+                default:
+                    throw new NotSupportedException("Unsupported collider type");
+            }
+        }
+
         public bool Collides(Rectangle target)
         {
-            // Calculate the closest point on the rectangle to the circle
             float closestX = MathHelper.Clamp(center.X, target.Left, target.Right);
             float closestY = MathHelper.Clamp(center.Y, target.Top, target.Bottom);
 
-            // Calculate the distance between the circle center and the closest point on the rectangle
-            float distanceX = center.X - closestX;
-            float distanceY = center.Y - closestY;
-
-            // Use Pythagorean theorem to get the distance between the circle center and the closest point
-            float distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-
-            // Check if the distance is less than the squared circle radius (avoiding square root operation)
-            return distanceSquared < (radius * radius);
-        }
-
-        public bool Contains(Point target)
-        {
-            // Calculate the distance between the point and the circle center
-            float distanceX = target.X - center.X;
-            float distanceY = target.Y - center.Y;
-            float distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-
-            // Check if the distance is less than the squared circle radius (avoiding square root operation)
-            return distanceSquared < (radius * radius);
+            float dx = center.X - closestX;
+            float dy = center.Y - closestY;
+            return (dx * dx + dy * dy) < (radius * radius);
         }
 
         public void Draw(Color color)
         {
-            int segments = 30; // Adjust this to control the circle's smoothness
+            int segments = 30;
             Vector2[] points = new Vector2[segments];
 
             for (int i = 0; i < segments; i++)
             {
                 float angle = i * MathHelper.TwoPi / segments;
-                float x = Center.X + Radius * (float)Math.Cos(angle);
-                float y = Center.Y + Radius * (float)Math.Sin(angle);
-                points[i] = new Vector2(x, y);
+                points[i] = center + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * radius;
             }
 
             for (int i = 0; i < segments - 1; i++)
-            {
                 DrawLine(points[i], points[i + 1], color);
-            }
 
-            DrawLine(points[segments - 1], points[0], color);
+            DrawLine(points[^1], points[0], color);
         }
 
-        private void DrawLine(Vector2 start, Vector2 end, Color color, int thickness = 3)
+        private void DrawLine(Vector2 start, Vector2 end, Color color, int thickness = 2)
         {
             Vector2 delta = end - start;
             float angle = (float)Math.Atan2(delta.Y, delta.X);
             float length = delta.Length();
 
             Globals.spriteBatch.Draw(
-                pixel, // A 1x1 white texture
-                start, // The starting position of the line
+                pixel,
+                start,
                 null,
-                color, // The color of the line
-                angle, // The angle of the line
+                color,
+                angle,
                 Vector2.Zero,
-                new Vector2(length, thickness), // The length and thickness of the line
+                new Vector2(length, thickness),
                 SpriteEffects.None,
                 0
             );

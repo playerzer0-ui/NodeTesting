@@ -2,10 +2,11 @@
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using System;
 
 namespace NodeTesting.models
 {
-    public class CollisionRect
+    public class CollisionRect : ICollider
     {
         private Rectangle rect;
         private Texture2D pixel;
@@ -16,30 +17,13 @@ namespace NodeTesting.models
         {
             rect = new Rectangle(x, y, width, height);
             pixel = new Texture2D(Globals.graphics.GraphicsDevice, 1, 1);
-            pixel.SetData<Color>(new Color[] { Color.White });
+            pixel.SetData(new[] { Color.White });
             rect.Offset(-(width / 2), -(height / 2));
         }
-        public Rectangle Rect { get => rect; set => rect = value; }
 
-        public bool Intersects(Rectangle target)
-        {
-            return rect.Intersects(target);
-        }
+        public Rectangle Rect => rect;
 
-        public bool Contains(Rectangle target)
-        {
-            return rect.Contains(target);
-        }
-
-        public bool Contains(Point target)
-        {
-            return rect.Contains(target);
-        }
-
-        public Vector2 pos()
-        {
-            return new Vector2(rect.X, rect.Y);
-        }
+        public Vector2 Pos => new(rect.X, rect.Y);
 
         public void SetOffsetExtra(int x, int y)
         {
@@ -54,9 +38,30 @@ namespace NodeTesting.models
             rect.Offset(-(rect.Width / 2) + offsetX, -(rect.Height / 2) + offsetY);
         }
 
-        public void DrawRect(Color color)
+        public void Draw(Color color)
         {
             Globals.spriteBatch.Draw(pixel, rect, color);
         }
+
+        public bool Contains(Point target)
+        {
+            return rect.Contains(target);
+        }
+
+        public bool Intersects(ICollider other)
+        {
+            switch (other)
+            {
+                case CollisionRect r:
+                    return rect.Intersects(r.Rect);
+
+                case CollisionCircle c:
+                    return c.Collides(rect); // You already have this logic
+
+                default:
+                    throw new NotSupportedException("Unsupported collider type");
+            }
+        }
     }
+
 }
