@@ -1,8 +1,9 @@
 ﻿using Microsoft.Xna.Framework;
-using NodeTesting.models;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using NodeTesting.models;
+using System;
 
 namespace NodeTesting
 {
@@ -34,7 +35,8 @@ namespace NodeTesting
 
             pos += dir * dt * speed;
 
-            rect.UpdateRect((int)pos.X, (int)pos.Y);
+            rect.UpdateRect((int)Math.Round(pos.X), (int)Math.Round(pos.Y));
+
         }
     }
 }

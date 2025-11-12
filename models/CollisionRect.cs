@@ -87,9 +87,8 @@ namespace NodeTesting.models
         /// <param name="y">The new y-coordinate of the rectangle's center.</param>
         public void UpdateRect(int x, int y)
         {
-            rect.X = x;
-            rect.Y = y;
-            rect.Offset(-(rect.Width / 2) + offsetX, -(rect.Height / 2) + offsetY);
+            rect.X = x - (rect.Width / 2) + offsetX;
+            rect.Y = y - (rect.Height / 2) + offsetY;
         }
 
         /// <summary>
