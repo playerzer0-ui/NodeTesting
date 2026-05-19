@@ -44,5 +44,11 @@ namespace NodeTesting.models
                    Matrix.CreateScale(zoom) *
                    Matrix.CreateTranslation(new Vector3(origin, 0f));
         }
+
+        public void Reset()
+        {
+            position = Vector2.Zero;
+            zoom = 1f;
+        }
     }
 }

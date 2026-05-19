@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using System;
 
 namespace NodeTesting.models;
@@ -18,6 +19,7 @@ public class Canvas
     private readonly RenderTarget2D _target;
     private readonly GraphicsDevice _graphicsDevice;
     private Rectangle _destinationRectangle;
+    private float _scale;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Canvas"/> class.
@@ -58,6 +60,41 @@ public class Canvas
         int posY = (screenSize.Height - newHeight) / 2;
 
         _destinationRectangle = new Rectangle(posX, posY, newWidth, newHeight);
+    }
+
+    /// <summary>
+    /// Converts a raw screen-space mouse position into virtual canvas space
+    /// (the fixed 960x640 coordinate system the game is drawn in).
+    ///
+    /// This accounts for both the letterbox offset (black bars) and the scale
+    /// factor, so the result is always correct regardless of window size.
+    /// </summary>
+    public Vector2 ScreenToCanvas(Vector2 screenPos)
+    {
+        return new Vector2(
+            (screenPos.X - _destinationRectangle.X) / _scale,
+            (screenPos.Y - _destinationRectangle.Y) / _scale
+        );
+    }
+
+    /// <summary>
+    /// Converts a raw screen-space mouse position all the way into world space,
+    /// applying both the canvas letterbox correction and the camera transform.
+    ///
+    /// Use this everywhere you need mouse-in-world coordinates. You will never
+    /// have to think about scaling again.
+    /// </summary>
+    public Vector2 ScreenToWorld(Vector2 screenPos, Matrix cameraTransform)
+    {
+        Vector2 canvasPos = ScreenToCanvas(screenPos);
+        return Vector2.Transform(canvasPos, Matrix.Invert(cameraTransform));
+    }
+
+    /// <summary>Convenience overload that reads the mouse position for you.</summary>
+    public Vector2 ScreenToWorld(Matrix cameraTransform)
+    {
+        MouseState mouse = Mouse.GetState();
+        return ScreenToWorld(new Vector2(mouse.X, mouse.Y), cameraTransform);
     }
 
     /// <summary>
