@@ -13,6 +13,8 @@ namespace NodeTesting.models
         private Vector2 center;
         private int radius;
         private Texture2D pixel;
+        private int offsetX;
+        private int offsetY;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CollisionCircle"/> class.
@@ -58,6 +60,24 @@ namespace NodeTesting.models
                 default:
                     throw new NotSupportedException("Unsupported collider type.");
             }
+        }
+
+        /// <summary>
+        /// Sets an additional offset applied when updating the circle's position.
+        /// </summary>
+        public void SetOffsetExtra(int x, int y)
+        {
+            offsetX = x;
+            offsetY = y;
+        }
+
+        /// <summary>
+        /// Updates the circle's center position, applying any extra offsets.
+        /// </summary>
+        public void UpdateCenter(int x, int y)
+        {
+            center.X = x + offsetX;
+            center.Y = y + offsetY;
         }
 
         /// <summary>

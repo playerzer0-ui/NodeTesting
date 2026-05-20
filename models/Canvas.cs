@@ -31,10 +31,13 @@ public class Canvas
     /// The specified width and height define the logical resolution of the game world. 
     /// The rendered image will later be scaled to fit the actual window or screen.
     /// </remarks>
-    public Canvas(GraphicsDevice graphicsDevice, int width, int height)
+    public Canvas(GraphicsDevice graphicsDevice, GameWindow window, int width, int height)
     {
         _graphicsDevice = graphicsDevice;
         _target = new RenderTarget2D(_graphicsDevice, width, height);
+        SetDestinationRectangle();
+
+        window.ClientSizeChanged += (_, __) => SetDestinationRectangle();
     }
 
     /// <summary>
@@ -52,10 +55,11 @@ public class Canvas
 
         float scaleX = (float)screenSize.Width / _target.Width;
         float scaleY = (float)screenSize.Height / _target.Height;
-        float scale = Math.Min(scaleX, scaleY);
+        _scale = Math.Min(scaleX, scaleY);
 
-        int newWidth = (int)(_target.Width * scale);
-        int newHeight = (int)(_target.Height * scale);
+        int newWidth = (int)MathF.Round(_target.Width * _scale);
+        int newHeight = (int)MathF.Round(_target.Height * _scale);
+
         int posX = (screenSize.Width - newWidth) / 2;
         int posY = (screenSize.Height - newHeight) / 2;
 
@@ -125,7 +129,7 @@ public class Canvas
         _graphicsDevice.SetRenderTarget(null);
         _graphicsDevice.Clear(Color.Black);
 
-        spriteBatch.Begin();
+        spriteBatch.Begin(samplerState: SamplerState.PointClamp);
         spriteBatch.Draw(_target, _destinationRectangle, Color.White);
         spriteBatch.End();
     }

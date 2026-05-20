@@ -50,7 +50,7 @@ namespace NodeTesting
             font = Content.Load<SpriteFont>("File");
             rectangle = new CollisionRect(500, 100, 200, 200);
             camera = new Camera();
-            canvas = new Canvas(_graphics.GraphicsDevice, 1280, 720);
+            canvas = new Canvas(_graphics.GraphicsDevice, Window, 1280, 720);
 
             //sounds
             song = Content.Load<Song>("sounds/nature");
@@ -65,7 +65,7 @@ namespace NodeTesting
 
             // TODO: Add your update logic here
             player.Update(gameTime);
-            canvas.SetResolution(_graphics.GraphicsDevice.Viewport.Width, _graphics.GraphicsDevice.Viewport.Height);
+            //canvas.SetResolution(_graphics.GraphicsDevice.Viewport.Width, _graphics.GraphicsDevice.Viewport.Height);
             camera.Position = player.Pos;
             base.Update(gameTime);
         }
