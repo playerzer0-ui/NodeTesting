@@ -16,8 +16,10 @@ namespace NodeTesting
         private Song song;
 
         Player player;
+        Bubble bubble;
         CollisionCircle circle;
         CollisionRect rectangle;
+        CollisionRect stepHere;
         Camera camera;
         Canvas canvas;
         public Game1()
@@ -46,9 +48,11 @@ namespace NodeTesting
             // TODO: use this.Content to load your game content here
 
             player = new Player("player", new Vector2(300, 300));
-            circle = new CollisionCircle(300, 300, 20);
+            bubble = new Bubble(400, 10);
+            circle = new CollisionCircle(600, 300, 20);
             font = Content.Load<SpriteFont>("File");
             rectangle = new CollisionRect(500, 100, 200, 200);
+            stepHere = new CollisionRect(100, 200, 200, 200);
             camera = new Camera();
             canvas = new Canvas(_graphics.GraphicsDevice, Window, 1280, 720);
 
@@ -62,11 +66,29 @@ namespace NodeTesting
         {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
+            Vector2 viewportCenter = new Vector2(
+            Globals.graphics.GraphicsDevice.Viewport.Width / 2f,
+            Globals.graphics.GraphicsDevice.Viewport.Height / 2f);
 
             // TODO: Add your update logic here
-            player.Update(gameTime);
             //canvas.SetResolution(_graphics.GraphicsDevice.Viewport.Width, _graphics.GraphicsDevice.Viewport.Height);
-            camera.Position = player.Pos;
+
+            if (player.Rect.Intersects(stepHere))
+            {
+                camera.MoveTo(new CameraFocus(rectangle.Center, targetZoom: 1f, transitionSpeed: 0.08f));
+            }
+            else if (player.Rect.Intersects(circle))
+            {
+                camera.MoveTo(new CameraFocus(bubble.Circle.Center, targetZoom: 1f, transitionSpeed: 0.3f));
+            }
+            else
+            {
+                camera.MoveTo(new CameraFocus(player.Pos, targetZoom: 1f, anchor: FocusAnchor.Persistent));
+            }
+
+            player.Update(gameTime);
+            bubble.Update(gameTime);
+            camera.Update(gameTime);
             base.Update(gameTime);
         }
 
@@ -77,25 +99,12 @@ namespace NodeTesting
             _spriteBatch.Begin(transformMatrix: camera.Transform());
             player.Draw(Color.White);
             player.Rect.Draw(new Color(255, 0, 0, 128));
-            if (circle.Collides(player.Rect.Rect))
-            {
-                circle.Draw(new Color(0, 255, 0, 128));
-            }
-            else
-            {
-                circle.Draw(new Color(255, 0, 0, 128));
-            }
 
-            if(rectangle.Intersects(player.Rect))
-            {
-                rectangle.Draw(new Color(0, 255, 0, 128));
-                MediaPlayer.Play(song);
-            }
-            else
-            {
-                rectangle.Draw(new Color(255, 0, 0, 128));
-            }
+            stepHere.Draw(new Color(0, 0, 255, 128));
+            rectangle.Draw(Color.White);
 
+            bubble.Draw();
+            circle.Draw(Color.White);
             _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
             _spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
             _spriteBatch.End();

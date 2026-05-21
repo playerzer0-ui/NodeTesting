@@ -20,6 +20,8 @@ namespace NodeTesting.models
         /// </summary>
         public Vector2 Pos { get => pos; set => pos = value; }
 
+        public Vector2 Origin { get => origin; set => origin = value; }
+
         /// <summary>
         /// Creates a new sprite instance with the specified texture and position.
         /// </summary>

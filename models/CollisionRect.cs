@@ -15,6 +15,8 @@ namespace NodeTesting.models
         private Texture2D pixel;
         private int offsetX;
         private int offsetY;
+        private int width;
+        private int height;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CollisionRect"/> class.
@@ -25,6 +27,8 @@ namespace NodeTesting.models
         /// <param name="height">The height of the rectangle, in pixels.</param>
         public CollisionRect(int x, int y, int width, int height)
         {
+            this.width = width;
+            this.height = height;
             rect = new Rectangle(x, y, width, height);
             pixel = new Texture2D(Globals.graphics.GraphicsDevice, 1, 1);
             pixel.SetData(new[] { Color.White });
@@ -35,6 +39,8 @@ namespace NodeTesting.models
         /// Gets the internal <see cref="Rectangle"/> that defines this collider's bounds.
         /// </summary>
         public Rectangle Rect => rect;
+
+        public Vector2 Center => new Vector2(Pos.X + this.width / 2f, Pos.Y + this.height / 2f);
 
         /// <summary>
         /// Gets the top-left position of the rectangle in world space.
