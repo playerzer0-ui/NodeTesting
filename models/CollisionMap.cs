@@ -31,6 +31,7 @@ namespace NodeTesting.models
 
                         // Create a CollisionRect for this tile
                         CollisionRect tileCollider = new CollisionRect(centerX, centerY, TileWidth, TileHeight);
+                        tileCollider.IsStatic = true;
                         _collisionRects.Add(tileCollider);
                     }
                 }

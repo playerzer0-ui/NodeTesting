@@ -20,6 +20,11 @@ namespace NodeTesting
         CollisionCircle circle;
         CollisionRect rectangle;
         CollisionRect stepHere;
+
+        CollisionRect WallRect;
+        CollisionCircle WallCircle;
+        ICollider[] walls;
+
         Camera camera;
         Canvas canvas;
         public Game1()
@@ -56,6 +61,11 @@ namespace NodeTesting
             camera = new Camera();
             canvas = new Canvas(_graphics.GraphicsDevice, Window, 1280, 720);
 
+            WallRect = new CollisionRect(500, 500, 100, 100);
+            WallCircle = new CollisionCircle(600, 500, 50);
+            WallRect.IsStatic = true;
+            WallCircle.IsStatic = true;
+
             //sounds
             song = Content.Load<Song>("sounds/nature");
             
@@ -69,6 +79,12 @@ namespace NodeTesting
             Vector2 viewportCenter = new Vector2(
             Globals.graphics.GraphicsDevice.Viewport.Width / 2f,
             Globals.graphics.GraphicsDevice.Viewport.Height / 2f);
+
+            walls = new ICollider[]
+            {
+                WallRect,   // IsStatic = true
+                WallCircle  // IsStatic = true
+            };
 
             // TODO: Add your update logic here
             //canvas.SetResolution(_graphics.GraphicsDevice.Viewport.Width, _graphics.GraphicsDevice.Viewport.Height);
@@ -86,7 +102,9 @@ namespace NodeTesting
                 camera.MoveTo(new CameraFocus(player.Pos, targetZoom: 1f, anchor: FocusAnchor.Persistent));
             }
 
-            player.Update(gameTime);
+
+
+            player.Update(gameTime, walls);
             bubble.Update(gameTime);
             camera.Update(gameTime);
             base.Update(gameTime);
@@ -105,6 +123,11 @@ namespace NodeTesting
 
             bubble.Draw();
             circle.Draw(Color.White);
+
+            foreach (ICollider wall in walls)
+            {
+                wall.Draw(Color.Purple);
+            }
             _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
             _spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
             _spriteBatch.End();

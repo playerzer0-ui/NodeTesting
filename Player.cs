@@ -20,7 +20,7 @@ namespace NodeTesting
         }
         public CollisionRect Rect { get => rect; set => rect = value; }
 
-        public void Update(GameTime gt)
+        public void Update(GameTime gt, ICollider[] walls)
         {
             dir = Vector2.Zero;
             float dt = (float)gt.ElapsedGameTime.TotalSeconds;
@@ -37,6 +37,11 @@ namespace NodeTesting
 
             rect.UpdateRect((int)Math.Round(pos.X), (int)Math.Round(pos.Y));
 
+            foreach (ICollider wall in walls)
+            {
+                wall.ResolveAgainst(rect);
+            }
+            pos = rect.Center - new Vector2(0, 25);
         }
     }
 }

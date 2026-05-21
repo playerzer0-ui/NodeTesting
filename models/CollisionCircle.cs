@@ -40,6 +40,8 @@ namespace NodeTesting.models
         /// </summary>
         public int Radius { get => radius; set => radius = value; }
 
+        public bool IsStatic { get; set; } = false;
+
         /// <summary>
         /// Determines whether this circle intersects with another collider.
         /// </summary>
@@ -156,6 +158,54 @@ namespace NodeTesting.models
                 SpriteEffects.None,
                 0
             );
+        }
+
+        public Vector2 ResolveAgainst(ICollider moving)
+        {
+            if (!IsStatic || !Intersects(moving)) return Vector2.Zero;
+
+            switch (moving)
+            {
+                case CollisionCircle c:
+                    return ResolveCircleVsCircle(c);
+                case CollisionRect r:
+                    // Delegate to rect's own resolve logic (rect vs circle is handled there)
+                    return ResolveCircleVsRect(r);
+                default:
+                    return Vector2.Zero;
+            }
+        }
+
+        private Vector2 ResolveCircleVsCircle(CollisionCircle moving)
+        {
+            Vector2 delta = moving.Center - center;
+            float distSq = delta.LengthSquared();
+            float minDist = radius + moving.Radius;
+
+            if (distSq >= minDist * minDist) return Vector2.Zero;
+
+            float dist = (float)Math.Sqrt(distSq);
+            Vector2 push = (dist > 0 ? delta / dist : Vector2.UnitX) * (minDist - dist);
+            moving.Center += push;
+            return push;
+        }
+
+        private Vector2 ResolveCircleVsRect(CollisionRect moving)
+        {
+            // Closest point on the moving rect to this circle
+            float closestX = MathHelper.Clamp(center.X, moving.Rect.Left, moving.Rect.Right);
+            float closestY = MathHelper.Clamp(center.Y, moving.Rect.Top, moving.Rect.Bottom);
+
+            Vector2 delta = new Vector2(closestX, closestY) - center;
+            float distSq = delta.LengthSquared();
+
+            if (distSq >= radius * radius) return Vector2.Zero;
+
+            float dist = (float)Math.Sqrt(distSq);
+            // Push the rect away from this circle
+            Vector2 push = (dist > 0 ? delta / dist : Vector2.UnitY) * (radius - dist);
+            moving.Translate((int)push.X, (int)push.Y);
+            return push;
         }
     }
 

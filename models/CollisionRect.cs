@@ -39,6 +39,7 @@ namespace NodeTesting.models
         /// Gets the internal <see cref="Rectangle"/> that defines this collider's bounds.
         /// </summary>
         public Rectangle Rect => rect;
+        public bool IsStatic { get; set; } = false;
 
         public Vector2 Center => new Vector2(Pos.X + this.width / 2f, Pos.Y + this.height / 2f);
 
@@ -104,6 +105,65 @@ namespace NodeTesting.models
         public void Draw(Color color)
         {
             Globals.spriteBatch.Draw(pixel, rect, color);
+        }
+
+        public Vector2 ResolveAgainst(ICollider moving)
+        {
+            if (!IsStatic || !Intersects(moving)) return Vector2.Zero;
+
+            switch (moving)
+            {
+                case CollisionRect r:
+                    return ResolveRectVsRect(r);
+                case CollisionCircle c:
+                    return ResolveRectVsCircle(c);
+                default:
+                    return Vector2.Zero;
+            }
+        }
+
+        private Vector2 ResolveRectVsRect(CollisionRect moving)
+        {
+            int overlapLeft = moving.Rect.Right - rect.Left;
+            int overlapRight = rect.Right - moving.Rect.Left;
+            int overlapTop = moving.Rect.Bottom - rect.Top;
+            int overlapBottom = rect.Bottom - moving.Rect.Top;
+
+            if (Math.Min(overlapLeft, overlapRight) < Math.Min(overlapTop, overlapBottom))
+            {
+                int pushX = overlapLeft < overlapRight ? -overlapLeft : overlapRight;
+                moving.Translate(pushX, 0);
+                return new Vector2(pushX, 0);
+            }
+            else
+            {
+                int pushY = overlapTop < overlapBottom ? -overlapTop : overlapBottom;
+                moving.Translate(0, pushY);
+                return new Vector2(0, pushY);
+            }
+        }
+
+        private Vector2 ResolveRectVsCircle(CollisionCircle moving)
+        {
+            // Find the closest point on this rect to the circle center
+            float closestX = MathHelper.Clamp(moving.Center.X, rect.Left, rect.Right);
+            float closestY = MathHelper.Clamp(moving.Center.Y, rect.Top, rect.Bottom);
+
+            Vector2 delta = moving.Center - new Vector2(closestX, closestY);
+            float distSq = delta.LengthSquared();
+
+            if (distSq >= moving.Radius * moving.Radius) return Vector2.Zero;
+
+            float dist = (float)Math.Sqrt(distSq);
+            Vector2 push = (dist > 0 ? delta / dist : Vector2.UnitY) * (moving.Radius - dist);
+            moving.Center += push;
+            return push;
+        }
+
+        public void Translate(int dx, int dy)
+        {
+            rect.X += dx;
+            rect.Y += dy;
         }
     }
 
