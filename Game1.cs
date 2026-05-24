@@ -17,6 +17,7 @@ namespace NodeTesting
 
         Player player;
         Bubble bubble;
+        Platform platform;
         CollisionCircle circle;
         CollisionRect rectangle;
         CollisionRect stepHere;
@@ -54,6 +55,7 @@ namespace NodeTesting
 
             player = new Player("player", new Vector2(300, 300));
             bubble = new Bubble(400, 10);
+            platform = new Platform();
             circle = new CollisionCircle(600, 300, 20);
             font = Content.Load<SpriteFont>("File");
             rectangle = new CollisionRect(500, 100, 200, 200);
@@ -103,7 +105,7 @@ namespace NodeTesting
             }
 
 
-
+            platform.Update(gameTime);
             player.Update(gameTime, walls);
             bubble.Update(gameTime);
             camera.Update(gameTime);
@@ -128,6 +130,8 @@ namespace NodeTesting
             {
                 wall.Draw(Color.Purple);
             }
+
+            platform.Draw();
             _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
             _spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
             _spriteBatch.End();
