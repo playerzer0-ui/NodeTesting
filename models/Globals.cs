@@ -9,5 +9,6 @@ namespace NodeTesting.models
         public static ContentManager Content;
         public static SpriteBatch spriteBatch;
         public static GraphicsDeviceManager graphics;
+        public static InputManager Input = new InputManager();
     }
 }

@@ -24,23 +24,17 @@ namespace NodeTesting
         {
             dir = Vector2.Zero;
             float dt = (float)gt.ElapsedGameTime.TotalSeconds;
-            KeyboardState kState = Keyboard.GetState();
 
-            if (kState.IsKeyDown(Keys.W)) dir.Y -= 1;
-            if (kState.IsKeyDown(Keys.S)) dir.Y += 1;
-            if (kState.IsKeyDown(Keys.A)) dir.X -= 1;
-            if (kState.IsKeyDown(Keys.D)) dir.X += 1;
+            if (Globals.Input.IsPressed("MoveUp")) dir.Y -= 1;
+            if (Globals.Input.IsPressed("MoveDown")) dir.Y += 1;
+            if (Globals.Input.IsPressed("MoveLeft")) dir.X -= 1;
+            if (Globals.Input.IsPressed("MoveRight")) dir.X += 1;
 
             if (dir != Vector2.Zero) dir.Normalize();
-
             pos += dir * dt * speed;
-
             rect.UpdateRect((int)Math.Round(pos.X), (int)Math.Round(pos.Y));
-
             foreach (ICollider wall in walls)
-            {
                 wall.ResolveAgainst(rect);
-            }
             pos = rect.Center - new Vector2(0, 25);
         }
     }

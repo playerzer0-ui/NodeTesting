@@ -24,6 +24,7 @@ namespace NodeTesting
 
         CollisionRect WallRect;
         CollisionCircle WallCircle;
+        Effect monochromeShader;
         ICollider[] walls;
 
         Camera camera;
@@ -68,14 +69,24 @@ namespace NodeTesting
             WallRect.IsStatic = true;
             WallCircle.IsStatic = true;
 
+            //shaders
+            monochromeShader = Content.Load<Effect>("FileX");
+
             //sounds
             song = Content.Load<Song>("sounds/nature");
-            
+
+            //controls
+            Globals.Input.Register("MoveUp", Keys.W, Buttons.DPadUp);
+            Globals.Input.Register("MoveDown", Keys.S, Buttons.DPadDown);
+            Globals.Input.Register("MoveLeft", Keys.A, Buttons.DPadLeft);
+            Globals.Input.Register("MoveRight", Keys.D, Buttons.DPadRight);
+
 
         }
 
         protected override void Update(GameTime gameTime)
         {
+            Globals.Input.Update();
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
             Vector2 viewportCenter = new Vector2(
@@ -116,7 +127,7 @@ namespace NodeTesting
         {
             canvas.Activate();
             // TODO: Add your drawing code here
-            _spriteBatch.Begin(transformMatrix: camera.Transform());
+            _spriteBatch.Begin(transformMatrix: camera.Transform(), effect: monochromeShader);
             player.Draw(Color.White);
             player.Rect.Draw(new Color(255, 0, 0, 128));
 
