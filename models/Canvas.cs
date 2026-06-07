@@ -41,6 +41,14 @@ public class Canvas
     }
 
     /// <summary>
+    /// Gets the internal render target texture for use in shaders.
+    /// </summary>
+    public Texture2D GetTexture()
+    {
+        return _target;
+    }
+
+    /// <summary>
     /// Calculates and sets the destination rectangle used to draw the canvas 
     /// on the screen while maintaining aspect ratio.
     /// </summary>
@@ -130,6 +138,20 @@ public class Canvas
         _graphicsDevice.Clear(Color.Black);
 
         spriteBatch.Begin(samplerState: SamplerState.PointClamp);
+        spriteBatch.Draw(_target, _destinationRectangle, Color.White);
+        spriteBatch.End();
+    }
+
+    /// <summary>
+    /// Draws the canvas to the screen with an optional post-processing effect.
+    /// Use this for full-screen shaders like CRT, monochrome, blur, etc.
+    /// </summary>
+    public void Draw(SpriteBatch spriteBatch, Effect effect = null)
+    {
+        _graphicsDevice.SetRenderTarget(null);
+        _graphicsDevice.Clear(Color.Black);
+
+        spriteBatch.Begin(samplerState: SamplerState.PointClamp, effect: effect);
         spriteBatch.Draw(_target, _destinationRectangle, Color.White);
         spriteBatch.End();
     }

@@ -25,6 +25,8 @@ namespace NodeTesting
         CollisionRect WallRect;
         CollisionCircle WallCircle;
         Effect monochromeShader;
+        Effect CRT;
+        Effect rain;
         ICollider[] walls;
 
         Camera camera;
@@ -71,6 +73,8 @@ namespace NodeTesting
 
             //shaders
             monochromeShader = Content.Load<Effect>("FileX");
+            CRT = Content.Load<Effect>("CRT_TV");
+            rain = Content.Load<Effect>("Rain");
 
             //sounds
             song = Content.Load<Song>("sounds/nature");
@@ -125,29 +129,31 @@ namespace NodeTesting
 
         protected override void Draw(GameTime gameTime)
         {
+            // ── Pass 1: draw everything cleanly onto the canvas ───────────────────
             canvas.Activate();
-            // TODO: Add your drawing code here
-            _spriteBatch.Begin(transformMatrix: camera.Transform(), effect: monochromeShader);
+            _spriteBatch.Begin(transformMatrix: camera.Transform()); // no shader here
             player.Draw(Color.White);
             player.Rect.Draw(new Color(255, 0, 0, 128));
-
             stepHere.Draw(new Color(0, 0, 255, 128));
             rectangle.Draw(Color.White);
-
             bubble.Draw();
             circle.Draw(Color.White);
-
             foreach (ICollider wall in walls)
-            {
                 wall.Draw(Color.Purple);
-            }
-
             platform.Draw();
             _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
             _spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
             _spriteBatch.End();
 
-            canvas.Draw(_spriteBatch);
+            // -- Pass 2: draw the canvas to the screen with CRT applied ----------
+            CRT.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
+            CRT.Parameters["Resolution"].SetValue(new Vector2(1280, 720));
+            CRT.Parameters["CurvatureAmount"].SetValue(0.5f);
+            CRT.Parameters["ScanlineStrength"].SetValue(0.2f);
+            CRT.Parameters["VignetteStrength"].SetValue(0.5f);
+            CRT.Parameters["AberrationAmount"].SetValue(0.004f);
+            CRT.Parameters["NoiseStrength"].SetValue(0.03f);
+            canvas.Draw(_spriteBatch, CRT); // apply CRT to the whole canvas at once
 
             base.Draw(gameTime);
         }
