@@ -28,6 +28,7 @@ namespace NodeTesting
         Effect CRT;
         Effect rain;
         ICollider[] walls;
+        TileMap tilemap;
 
         Camera camera;
         Canvas canvas;
@@ -65,6 +66,10 @@ namespace NodeTesting
             stepHere = new CollisionRect(100, 200, 200, 200);
             camera = new Camera();
             canvas = new Canvas(_graphics.GraphicsDevice, Window, 1280, 720);
+
+            tilemap = new TileMap("tilemap", 16, 16, "tilemap.csv");
+            tilemap.RegisterAnimation(20, new int[] { 20, 21, 22, 23 }, 0.15f);
+            tilemap.RegisterAnimation(28, new int[] { 28, 29, 30, 31 }, 0.15f);
 
             WallRect = new CollisionRect(500, 500, 100, 100);
             WallCircle = new CollisionCircle(600, 500, 50);
@@ -120,6 +125,7 @@ namespace NodeTesting
             }
 
 
+            tilemap.Update(gameTime);
             platform.Update(gameTime);
             player.Update(gameTime, walls);
             bubble.Update(gameTime);
@@ -132,6 +138,8 @@ namespace NodeTesting
             // ── Pass 1: draw everything cleanly onto the canvas ───────────────────
             canvas.Activate();
             _spriteBatch.Begin(transformMatrix: camera.Transform()); // no shader here
+
+            tilemap.Draw();
             player.Draw(Color.White);
             player.Rect.Draw(new Color(255, 0, 0, 128));
             stepHere.Draw(new Color(0, 0, 255, 128));
@@ -141,6 +149,7 @@ namespace NodeTesting
             foreach (ICollider wall in walls)
                 wall.Draw(Color.Purple);
             platform.Draw();
+            
             _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
             _spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
             _spriteBatch.End();
