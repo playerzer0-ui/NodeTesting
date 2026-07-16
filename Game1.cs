@@ -30,6 +30,9 @@ namespace NodeTesting
         ICollider[] walls;
         TileMap tilemap;
 
+        SpriteAnimation spriteAnimation;
+        SpriteAnimationMultiRow spriteAnimationMultiRow;
+
         Camera camera;
         Canvas canvas;
         public Game1()
@@ -66,6 +69,12 @@ namespace NodeTesting
             stepHere = new CollisionRect(100, 200, 200, 200);
             camera = new Camera();
             canvas = new Canvas(_graphics.GraphicsDevice, Window, 1280, 720);
+
+            spriteAnimation = new SpriteAnimation("singlesprite", 4, 8);
+            spriteAnimationMultiRow = new SpriteAnimationMultiRow("multirow", 16, 16, 4, 2);
+            spriteAnimationMultiRow.AddState("walk", 0);
+            spriteAnimationMultiRow.Play("walk");
+
 
             tilemap = new TileMap("tilemap", 16, 16, "tilemap.csv");
             tilemap.RegisterAnimation(20, new int[] { 20, 21, 22, 23 }, 0.15f);
@@ -124,6 +133,8 @@ namespace NodeTesting
                 camera.MoveTo(new CameraFocus(player.Pos, targetZoom: 1f, anchor: FocusAnchor.Persistent));
             }
 
+            spriteAnimation.Update(gameTime);
+            spriteAnimationMultiRow.Update(gameTime);
 
             tilemap.Update(gameTime);
             platform.Update(gameTime);
@@ -142,14 +153,16 @@ namespace NodeTesting
             tilemap.Draw();
             player.Draw(Color.White);
             player.Rect.Draw(new Color(255, 0, 0, 128));
-            stepHere.Draw(new Color(0, 0, 255, 128));
-            rectangle.Draw(Color.White);
-            bubble.Draw();
-            circle.Draw(Color.White);
-            foreach (ICollider wall in walls)
-                wall.Draw(Color.Purple);
-            platform.Draw();
-            
+            //stepHere.Draw(new Color(0, 0, 255, 128));
+            //rectangle.Draw(Color.White);
+            //bubble.Draw();
+            //circle.Draw(Color.White);
+            //foreach (ICollider wall in walls)
+            //    wall.Draw(Color.Purple);
+            //platform.Draw();
+
+            spriteAnimationMultiRow.Draw();
+
             _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
             _spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
             _spriteBatch.End();
@@ -165,17 +178,17 @@ namespace NodeTesting
             //canvas.Draw(_spriteBatch); // apply CRT to the whole canvas at once
 
             // In your Draw method - use these values:
-            rain.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
-            rain.Parameters["Resolution"].SetValue(new Vector2(1280, 720));
-            rain.Parameters["RainSpeed"].SetValue(3.0f);     // Much faster! Try 2.0-5.0
-            rain.Parameters["RainDensity"].SetValue(25f);
+            //rain.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
+            //rain.Parameters["Resolution"].SetValue(new Vector2(1280, 720));
+            //rain.Parameters["RainSpeed"].SetValue(3.0f);     // Much faster! Try 2.0-5.0
+            //rain.Parameters["RainDensity"].SetValue(25f);
             
-            rain.Parameters["DropLength"].SetValue(0.2f);    // Longer drops
-            rain.Parameters["DropWidth"].SetValue(0.02f);
-            rain.Parameters["RainOpacity"].SetValue(0.8f);
-            rain.Parameters["RippleStrength"].SetValue(0.3f);
+            //rain.Parameters["DropLength"].SetValue(0.2f);    // Longer drops
+            //rain.Parameters["DropWidth"].SetValue(0.02f);
+            //rain.Parameters["RainOpacity"].SetValue(0.8f);
+            //rain.Parameters["RippleStrength"].SetValue(0.3f);
 
-            canvas.Draw(_spriteBatch, rain);
+            canvas.Draw(_spriteBatch);
 
             base.Draw(gameTime);
         }

@@ -1,9 +1,35 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using System.Collections.Generic;
 
 namespace NodeTesting.models
 {
-    public class SpriteManager
+    /// <summary>
+    /// Represents a single animation state (e.g., Idle, Walk, Run)
+    /// </summary>
+    public class AnimationState
+    {
+        public string Name { get; set; }
+        public int RowIndex { get; set; }
+        public int FrameCount { get; set; }
+        public int FramesPerSecond { get; set; }
+        public bool IsLooping { get; set; } = true;
+        public int StartFrame { get; set; } = 0;
+
+        public AnimationState(string name, int rowIndex, int frameCount, int fps = 8, bool looping = true)
+        {
+            Name = name;
+            RowIndex = rowIndex;
+            FrameCount = frameCount;
+            FramesPerSecond = fps;
+            IsLooping = looping;
+        }
+    }
+
+    /// <summary>
+    /// Enhanced sprite animation with multi-row support for different animation states.
+    /// </summary>
+    public class SpriteAnimationMultiRow
     {
         protected Texture2D Texture;
         public Vector2 Position = Vector2.Zero;
@@ -12,91 +38,150 @@ namespace NodeTesting.models
         public float Rotation = 0f;
         public float Scale = 1f;
         public SpriteEffects SpriteEffect;
+
+        protected int FrameWidth;
+        protected int FrameHeight;
+        protected int Columns;
+        protected int Rows;
         protected Rectangle[] Rectangles;
+
+        // Animation state management
+        protected Dictionary<string, AnimationState> States = new Dictionary<string, AnimationState>();
+        protected AnimationState CurrentState;
+        protected string CurrentStateName = "";
+
+        // Frame tracking
         public int FrameIndex = 0;
-        public int frames;
+        protected float TimeElapsed = 0f;
+        protected float TimeToUpdate = 0.125f; // Default 8 FPS
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SpriteManager"/> class.
-        /// </summary>
-        /// <param name="Texture">The path to the texture in the Content folder.</param>
-        /// <param name="frames">The total number of frames in the texture.</param>
-        /// <remarks>
-        /// This constructor automatically divides the texture width evenly based on the specified frame count.
-        /// </remarks>
-        public SpriteManager(string Texture, int frames)
-        {
-            this.frames = frames;
-            this.Texture = Globals.Content.Load<Texture2D>(Texture);
-            int width = this.Texture.Width / frames;
-            Rectangles = new Rectangle[frames];
-
-            for (int i = 0; i < frames; i++)
-                Rectangles[i] = new Rectangle(i * width, 0, width, this.Texture.Height);
-        }
-
-        /// <summary>
-        /// Draws the current frame of the sprite to the screen.
-        /// </summary>
-        /// <param name="spriteBatch">The <see cref="SpriteBatch"/> used for rendering.</param>
-        public void Draw(SpriteBatch spriteBatch)
-        {
-            spriteBatch.Draw(Texture, Position, Rectangles[FrameIndex], Color, Rotation, Origin, Scale, SpriteEffect, 0f);
-        }
-    }
-
-    /// <summary>
-    /// Extends <see cref="SpriteManager"/> to add frame-based animation playback.
-    /// </summary>
-    public class SpriteAnimation : SpriteManager
-    {
-        private float timeElapsed;
-        public bool IsLooping = true;
-        private float timeToUpdate; //default, you may have to change it
-        public int FramesPerSecond { set { timeToUpdate = 1f / value; } }
         public bool IsFinished = false;
         public bool IsReversed = false;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SpriteAnimation"/> class.
+        /// Initializes a new instance with multi-row sprite sheet support.
         /// </summary>
-        /// <param name="Texture">The path to the texture in the Content folder.</param>
-        /// <param name="frames">The total number of frames in the sprite sheet.</param>
-        /// <param name="fps">The desired frames per second for animation playback.</param>
-        public SpriteAnimation(string Texture, int frames, int fps) : base(Texture, frames)
+        /// <param name="texturePath">The path to the texture in the Content folder.</param>
+        /// <param name="frameWidth">Width of each frame in pixels.</param>
+        /// <param name="frameHeight">Height of each frame in pixels.</param>
+        /// <param name="columns">Number of columns in the sprite sheet.</param>
+        /// <param name="rows">Number of rows in the sprite sheet.</param>
+        public SpriteAnimationMultiRow(string texturePath, int frameWidth, int frameHeight, int columns, int rows)
         {
-            FramesPerSecond = fps;
+            Texture = Globals.Content.Load<Texture2D>(texturePath);
+            FrameWidth = frameWidth;
+            FrameHeight = frameHeight;
+            Columns = columns;
+            Rows = rows;
+
+            // Create rectangles for all frames
+            Rectangles = new Rectangle[columns * rows];
+            for (int row = 0; row < rows; row++)
+            {
+                for (int col = 0; col < columns; col++)
+                {
+                    int index = row * columns + col;
+                    Rectangles[index] = new Rectangle(col * frameWidth, row * frameHeight, frameWidth, frameHeight);
+                }
+            }
+
+            Origin = new Vector2(frameWidth / 2f, frameHeight / 2f);
         }
 
         /// <summary>
-        /// Updates the animation based on elapsed time, looping or reversing as needed.
+        /// Alternative constructor that auto-detects frame dimensions.
         /// </summary>
-        /// <param name="gameTime">The current <see cref="GameTime"/> instance provided by MonoGame.</param>
-        /// <remarks>
-        /// This method advances the animation to the next frame based on the configured <see cref="FramesPerSecond"/>.
-        /// </remarks>
+        public SpriteAnimationMultiRow(string texturePath, int columns, int rows)
+        {
+            Texture = Globals.Content.Load<Texture2D>(texturePath);
+            Columns = columns;
+            Rows = rows;
+            FrameWidth = Texture.Width / columns;
+            FrameHeight = Texture.Height / rows;
+
+            // Create rectangles for all frames
+            Rectangles = new Rectangle[columns * rows];
+            for (int row = 0; row < rows; row++)
+            {
+                for (int col = 0; col < columns; col++)
+                {
+                    int index = row * columns + col;
+                    Rectangles[index] = new Rectangle(col * FrameWidth, row * FrameHeight, FrameWidth, FrameHeight);
+                }
+            }
+
+            Origin = new Vector2(FrameWidth / 2f, FrameHeight / 2f);
+        }
+
+        /// <summary>
+        /// Adds an animation state with the specified parameters.
+        /// </summary>
+        public void AddState(string name, int rowIndex, int frameCount, int fps = 8, bool looping = true, int startFrame = 0)
+        {
+            var state = new AnimationState(name, rowIndex, frameCount, fps, looping)
+            {
+                StartFrame = startFrame
+            };
+            States[name] = state;
+        }
+
+        /// <summary>
+        /// Adds an animation state with automatic frame detection.
+        /// </summary>
+        public void AddState(string name, int rowIndex, int fps = 8, bool looping = true)
+        {
+            int frameCount = Columns; // Assuming full row
+            AddState(name, rowIndex, frameCount, fps, looping);
+        }
+
+        /// <summary>
+        /// Plays the specified animation state.
+        /// </summary>
+        public void Play(string stateName, bool restart = true)
+        {
+            if (!States.ContainsKey(stateName))
+                return;
+
+            if (CurrentStateName != stateName || restart)
+            {
+                CurrentStateName = stateName;
+                CurrentState = States[stateName];
+                FrameIndex = CurrentState.StartFrame;
+                TimeElapsed = 0f;
+                IsFinished = false;
+                TimeToUpdate = 1f / CurrentState.FramesPerSecond;
+            }
+        }
+
+        /// <summary>
+        /// Updates the current animation (looping).
+        /// </summary>
         public void Update(GameTime gameTime)
         {
-            timeElapsed += (float)gameTime.ElapsedGameTime.TotalSeconds;
-            if (timeElapsed > timeToUpdate)
+            if (CurrentState == null)
+                return;
+
+            TimeElapsed += (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+            if (TimeElapsed > TimeToUpdate)
             {
-                timeElapsed -= timeToUpdate;
+                TimeElapsed -= TimeToUpdate;
 
                 if (!IsReversed)
                 {
-                    if (FrameIndex < Rectangles.Length - 1)
+                    if (FrameIndex < CurrentState.StartFrame + CurrentState.FrameCount - 1)
                         FrameIndex++;
-                    else if (IsLooping)
-                        FrameIndex = 0;
+                    else if (CurrentState.IsLooping)
+                        FrameIndex = CurrentState.StartFrame;
                     else
                         IsFinished = true;
                 }
                 else
                 {
-                    if (FrameIndex > 0)
+                    if (FrameIndex > CurrentState.StartFrame)
                         FrameIndex--;
-                    else if (IsLooping)
-                        FrameIndex = Rectangles.Length - 1;
+                    else if (CurrentState.IsLooping)
+                        FrameIndex = CurrentState.StartFrame + CurrentState.FrameCount - 1;
                     else
                         IsFinished = true;
                 }
@@ -104,29 +189,29 @@ namespace NodeTesting.models
         }
 
         /// <summary>
-        /// Updates the animation once without looping behavior.
+        /// Updates the animation once without looping (stops at last frame).
         /// </summary>
-        /// <param name="gameTime">The current <see cref="GameTime"/> instance provided by MonoGame.</param>
-        /// <remarks>
-        /// This version of <see cref="Update(GameTime)"/> stops at the final frame instead of looping.
-        /// </remarks>
         public void UpdateOnce(GameTime gameTime)
         {
-            timeElapsed += (float)gameTime.ElapsedGameTime.TotalSeconds;
-            if (timeElapsed > timeToUpdate)
+            if (CurrentState == null)
+                return;
+
+            TimeElapsed += (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+            if (TimeElapsed > TimeToUpdate)
             {
-                timeElapsed -= timeToUpdate;
+                TimeElapsed -= TimeToUpdate;
 
                 if (!IsReversed)
                 {
-                    if (FrameIndex < Rectangles.Length - 1)
+                    if (FrameIndex < CurrentState.StartFrame + CurrentState.FrameCount - 1)
                         FrameIndex++;
                     else
                         IsFinished = true;
                 }
                 else
                 {
-                    if (FrameIndex > 0)
+                    if (FrameIndex > CurrentState.StartFrame)
                         FrameIndex--;
                     else
                         IsFinished = true;
@@ -135,20 +220,123 @@ namespace NodeTesting.models
         }
 
         /// <summary>
-        /// Sets the current animation frame manually.
+        /// Draws the current frame.
         /// </summary>
-        /// <param name="frame">The frame index to switch to.</param>
-        public void setFrame(int frame)
+        public void Draw()
         {
-            FrameIndex = frame;
+            if (CurrentState == null)
+                return;
+
+            Globals.spriteBatch.Draw(Texture, Position, Rectangles[FrameIndex], Color,
+                Rotation, Origin, Scale, SpriteEffect, 0f);
         }
 
         /// <summary>
-        /// Toggles the animation playback direction.
+        /// Draws a specific frame by index.
         /// </summary>
-        public void ReverseAnimation()
+        public void DrawFrame(int index)
         {
-            IsReversed = !IsReversed;
+            if (index < 0 || index >= Rectangles.Length)
+                return;
+
+            Globals.spriteBatch.Draw(Texture, Position, Rectangles[index], Color,
+                Rotation, Origin, Scale, SpriteEffect, 0f);
         }
+
+        /// <summary>
+        /// Gets the rectangle for the current frame.
+        /// </summary>
+        public Rectangle GetCurrentFrameRect()
+        {
+            if (CurrentState == null)
+                return Rectangle.Empty;
+
+            return Rectangles[FrameIndex];
+        }
+
+        /// <summary>
+        /// Gets a specific frame rectangle by index.
+        /// </summary>
+        public Rectangle GetFrameRect(int index)
+        {
+            if (index < 0 || index >= Rectangles.Length)
+                return Rectangle.Empty;
+
+            return Rectangles[index];
+        }
+
+        /// <summary>
+        /// Sets the frame manually.
+        /// </summary>
+        public void SetFrame(int frameIndex)
+        {
+            if (frameIndex >= 0 && frameIndex < Rectangles.Length)
+                FrameIndex = frameIndex;
+        }
+
+        /// <summary>
+        /// Gets the current state name.
+        /// </summary>
+        public string GetCurrentState() => CurrentStateName;
+
+        /// <summary>
+        /// Checks if the current animation has finished (for non-looping animations).
+        /// </summary>
+        public bool IsAnimationFinished() => IsFinished;
+
+        /// <summary>
+        /// Resets the animation to the start of the current state.
+        /// </summary>
+        public void Reset()
+        {
+            if (CurrentState != null)
+            {
+                FrameIndex = CurrentState.StartFrame;
+                TimeElapsed = 0f;
+                IsFinished = false;
+            }
+        }
+
+        /// <summary>
+        /// Toggles reverse playback.
+        /// </summary>
+        public void ToggleReverse() => IsReversed = !IsReversed;
+
+        /// <summary>
+        /// Gets the number of rows in the sprite sheet.
+        /// </summary>
+        public int GetRowCount() => Rows;
+
+        /// <summary>
+        /// Gets the number of columns in the sprite sheet.
+        /// </summary>
+        public int GetColumnCount() => Columns;
+
+        /// <summary>
+        /// Gets the total number of frames.
+        /// </summary>
+        public int GetTotalFrames() => Rectangles.Length;
+    }
+
+    // Optional: Backward compatibility wrapper for old single-row animations
+    public class SpriteAnimation : SpriteAnimationMultiRow
+    {
+        public SpriteAnimation(string texturePath, int frames, int fps)
+            : base(texturePath, frames, 1)
+        {
+            AddState("Default", 0, frames, fps);
+            Play("Default");
+        }
+
+        //public void UpdateOnce(GameTime gameTime)
+        //{
+        //    // For single-row backward compatibility
+        //    var oldState = CurrentState;
+        //    if (oldState != null)
+        //        oldState.IsLooping = false;
+        //    Update(gameTime);
+        //    if (oldState != null)
+        //        oldState.IsLooping = true;
+        //}
     }
 }
