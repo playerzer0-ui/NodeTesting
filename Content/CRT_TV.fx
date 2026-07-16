@@ -94,3 +94,13 @@ technique CRT
         PixelShader = compile PS_SHADERMODEL MainPS();
     }
 }
+
+//CRT.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
+//CRT.Parameters["Resolution"].SetValue(
+//new Vector2(1280, 720));
+//CRT.Parameters["CurvatureAmount"].SetValue(0.5f);
+//CRT.Parameters["ScanlineStrength"].SetValue(0.2f);
+//CRT.Parameters["VignetteStrength"].SetValue(0.5f);
+//CRT.Parameters["AberrationAmount"].SetValue(0.004f);
+//CRT.Parameters["NoiseStrength"].SetValue(0.03f);
+//canvas.Draw(_spriteBatch, CRT);

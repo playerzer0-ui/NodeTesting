@@ -146,14 +146,27 @@ namespace NodeTesting
             _spriteBatch.End();
 
             // -- Pass 2: draw the canvas to the screen with CRT applied ----------
-            CRT.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
-            CRT.Parameters["Resolution"].SetValue(new Vector2(1280, 720));
-            CRT.Parameters["CurvatureAmount"].SetValue(0.5f);
-            CRT.Parameters["ScanlineStrength"].SetValue(0.2f);
-            CRT.Parameters["VignetteStrength"].SetValue(0.5f);
-            CRT.Parameters["AberrationAmount"].SetValue(0.004f);
-            CRT.Parameters["NoiseStrength"].SetValue(0.03f);
-            canvas.Draw(_spriteBatch, CRT); // apply CRT to the whole canvas at once
+            //CRT.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
+            //CRT.Parameters["Resolution"].SetValue(new Vector2(1280, 720));
+            //CRT.Parameters["CurvatureAmount"].SetValue(0.5f);
+            //CRT.Parameters["ScanlineStrength"].SetValue(0.2f);
+            //CRT.Parameters["VignetteStrength"].SetValue(0.5f);
+            //CRT.Parameters["AberrationAmount"].SetValue(0.004f);
+            //CRT.Parameters["NoiseStrength"].SetValue(0.03f);
+            //canvas.Draw(_spriteBatch); // apply CRT to the whole canvas at once
+
+            // In your Draw method - use these values:
+            rain.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
+            rain.Parameters["Resolution"].SetValue(new Vector2(1280, 720));
+            rain.Parameters["RainSpeed"].SetValue(3.0f);     // Much faster! Try 2.0-5.0
+            rain.Parameters["RainDensity"].SetValue(25f);
+            
+            rain.Parameters["DropLength"].SetValue(0.2f);    // Longer drops
+            rain.Parameters["DropWidth"].SetValue(0.02f);
+            rain.Parameters["RainOpacity"].SetValue(0.8f);
+            rain.Parameters["RippleStrength"].SetValue(0.3f);
+
+            canvas.Draw(_spriteBatch, rain);
 
             base.Draw(gameTime);
         }
