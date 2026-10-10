@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -85,6 +85,7 @@ namespace NodeTesting
             WallRect.IsStatic = true;
             WallCircle.IsStatic = true;
 
+
             //shaders
             monochromeShader = Content.Load<Effect>("FileX");
             CRT = Content.Load<Effect>("CRT_TV");
@@ -107,18 +108,12 @@ namespace NodeTesting
             Globals.Input.Update();
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
-            Vector2 viewportCenter = new Vector2(
-            Globals.graphics.GraphicsDevice.Viewport.Width / 2f,
-            Globals.graphics.GraphicsDevice.Viewport.Height / 2f);
 
             walls = new ICollider[]
             {
                 WallRect,   // IsStatic = true
                 WallCircle  // IsStatic = true
             };
-
-            // TODO: Add your update logic here
-            //canvas.SetResolution(_graphics.GraphicsDevice.Viewport.Width, _graphics.GraphicsDevice.Viewport.Height);
 
             if (player.Rect.Intersects(stepHere))
             {
@@ -148,24 +143,24 @@ namespace NodeTesting
         {
             // ── Pass 1: draw everything cleanly onto the canvas ───────────────────
             canvas.Activate();
-            _spriteBatch.Begin(transformMatrix: camera.Transform()); // no shader here
+            _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
 
             tilemap.Draw();
             player.Draw(Color.White);
             player.Rect.Draw(new Color(255, 0, 0, 128));
-            //stepHere.Draw(new Color(0, 0, 255, 128));
-            //rectangle.Draw(Color.White);
-            //bubble.Draw();
-            //circle.Draw(Color.White);
-            //foreach (ICollider wall in walls)
-            //    wall.Draw(Color.Purple);
-            //platform.Draw();
+            stepHere.Draw(new Color(0, 0, 255, 128));
+            rectangle.Draw(Color.White);
+            bubble.Draw();
+            circle.Draw(Color.White);
+            foreach (ICollider wall in walls)
+                wall.Draw(Color.Purple);
+            platform.Draw();
 
             spriteAnimationMultiRow.Draw();
 
-            _spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
-            _spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
-            _spriteBatch.End();
+            //_spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
+            //_spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);
+            //_spriteBatch.End();
 
             // -- Pass 2: draw the canvas to the screen with CRT applied ----------
             //CRT.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
@@ -182,12 +177,23 @@ namespace NodeTesting
             //rain.Parameters["Resolution"].SetValue(new Vector2(1280, 720));
             //rain.Parameters["RainSpeed"].SetValue(3.0f);     // Much faster! Try 2.0-5.0
             //rain.Parameters["RainDensity"].SetValue(25f);
-            
+
             //rain.Parameters["DropLength"].SetValue(0.2f);    // Longer drops
             //rain.Parameters["DropWidth"].SetValue(0.02f);
             //rain.Parameters["RainOpacity"].SetValue(0.8f);
             //rain.Parameters["RippleStrength"].SetValue(0.3f);
 
+            //canvas.Draw(_spriteBatch);
+
+            // draw world sprites here
+            _spriteBatch.End();
+
+            // 2. UI layer: 1920x1080 coordinates, stays crisp at any window size
+            canvas.BeginUI(_spriteBatch);
+            _spriteBatch.DrawString(font, "Hello", new Vector2(40, 40), Color.White);
+            canvas.EndUI(_spriteBatch);
+
+            // 3. Composite both to the screen (optionally pass a shader for the game layer)
             canvas.Draw(_spriteBatch);
 
             base.Draw(gameTime);
