@@ -1,4 +1,4 @@
-# NodeTesting
+﻿# NodeTesting
 
 A small 2D game engine built on top of **MonoGame (DesktopGL)**: a set of models that make game development easier — rendering at a fixed resolution, sprites and animations, tilemaps, colliders, a camera, input mapping, paths and text.
 
@@ -51,7 +51,7 @@ Globals.graphics = _graphics;
 |---|---|---|
 | `Globals.Content` | `ContentManager` | Loads textures for sprites, maps, animations |
 | `Globals.spriteBatch` | `SpriteBatch` | Every model's `Draw()` draws with this |
-| `Globals.graphics` | `GraphicsDeviceManager` | Used by `Camera` and `Canvas.SetResolution` |
+| `Globals.graphics` | `GraphicsDeviceManager` | Used by `Canvas.SetResolution` |
 | `Globals.Input` | `InputManager` | A ready-made input manager (see [InputManager](#-inputmanager)) |
 
 > Models load their textures in their constructors, so create them **after** `Globals` is set.
@@ -152,11 +152,18 @@ Vector2 mouseWorld = canvas.ScreenToWorld(camera.Transform());
 
 ## 🎥 Camera & CameraFocus
 
-A 2D camera with pan, zoom and rotation, plus smooth "focus" transitions.
+A 2D camera with pan, zoom and rotation, smooth "focus" transitions, and optional world bounds.
+
+The camera views the [Canvas](#-canvas) game layer, so it's created from the canvas. Its `Origin` is the **center of the canvas** (e.g. `(640, 360)` for 1280×720): the screen point where the camera's `Position` gets drawn. Because the canvas size never changes, resizing the window can't throw the camera off.
 
 #### Constructor
 
-**public Camera()** — starts at `(0, 0)`, zoom `1`, with its origin at the center of the viewport.
+**public Camera(Canvas canvas)** — starts at `(0, 0)`, zoom `1`, with its origin at the center of the canvas.
+
+```csharp
+canvas = new Canvas(GraphicsDevice, Window, 1280, 720);
+camera = new Camera(canvas);   // create the canvas first
+```
 
 #### Properties
 
@@ -167,6 +174,7 @@ A 2D camera with pan, zoom and rotation, plus smooth "focus" transitions.
 | `Rotation` | Rotation in radians |
 | `Origin` | Screen point the camera is centered on |
 | `IsFocusing` | `true` while moving toward or locked on a focus |
+| `Bounds` | The world area the view is kept inside, or `null` |
 
 #### Methods
 
@@ -174,7 +182,8 @@ A 2D camera with pan, zoom and rotation, plus smooth "focus" transitions.
 |---|---|
 | `Transform()` | The view matrix. Pass it to `SpriteBatch.Begin(transformMatrix: ...)`. |
 | `MoveTo(CameraFocus focus)` | Starts moving toward a focus point. |
-| `Update(GameTime)` | Drives the focus transition. Call once per frame. |
+| `Update(GameTime)` | Drives the focus transition and applies the bounds. Call once per frame. |
+| `SetBounds(Rectangle? worldBounds)` | Keeps the view inside a world rectangle. `null` removes the limit. |
 | `Release()` | Stops following the current focus. |
 | `Reset()` | Back to `(0, 0)`, zoom `1`, no focus. |
 
@@ -200,6 +209,22 @@ camera.MoveTo(new CameraFocus(node.Position, mode: FocusMode.Instant));
 
 camera.Release();
 ```
+
+#### Keeping the view inside the map
+
+Without bounds, the camera keeps the player centered even at the map's edge, so the screen shows the empty area past it. `SetBounds` stops the camera's center half a screen away from each edge, so the map edge lines up with the screen edge and the player walks toward the side of the screen instead.
+
+```csharp
+camera.SetBounds(tilemap.PixelBounds);
+camera.MoveTo(new CameraFocus(player.Position, targetZoom: 2f, anchor: FocusAnchor.Persistent));
+```
+
+How it works, for a 1280×720 canvas at zoom `1`: the camera sees 640 pixels either side of its center (`Origin / Zoom`), so its center can't go below `Left + 640` or above `Right − 640` (and likewise `Top + 360` / `Bottom − 360`).
+
+- Zooming in shows less of the world, so the camera can get closer to the edges.
+- If the map is smaller than the view on an axis, it's centered on that axis instead.
+- A `OneShot` focus near an edge still arrives: it stops at the closest point the camera can reach.
+- Bounds assume `Rotation` is `0`. A rotated view can still show past the edges.
 
 ---
 
@@ -304,6 +329,7 @@ The CSV is looked up in the working directory and in `Content/`. Mark it as *Cop
 | `RegisterAnimation(int baseTileId, int[] frameTileIds, float frameDurationSeconds)` | Every cell with `baseTileId` cycles through `frameTileIds` |
 | `Update(GameTime)` | Advances tile animations. Call once per frame. |
 | `Draw()` | Draws the map |
+| `PixelBounds` | The map's area in world pixels, e.g. for `camera.SetBounds(tilemap.PixelBounds)` |
 
 ```csharp
 tilemap = new TileMap("tilemap", 16, 16, "tilemap.csv");

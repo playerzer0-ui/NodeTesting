@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -67,8 +67,8 @@ namespace NodeTesting
             font = Content.Load<SpriteFont>("File");
             rectangle = new CollisionRect(500, 100, 200, 200);
             stepHere = new CollisionRect(100, 200, 200, 200);
-            camera = new Camera();
             canvas = new Canvas(_graphics.GraphicsDevice, Window, 1280, 720);
+            camera = new Camera(canvas);
 
             spriteAnimation = new SpriteAnimation("singlesprite", 4, 8);
             spriteAnimationMultiRow = new SpriteAnimationMultiRow("multirow", 16, 16, 4, 2);
@@ -130,6 +130,8 @@ namespace NodeTesting
 
             spriteAnimation.Update(gameTime);
             spriteAnimationMultiRow.Update(gameTime);
+
+            camera.SetBounds(new Rectangle(0, 0, 2000, 2000));
 
             tilemap.Update(gameTime);
             platform.Update(gameTime);

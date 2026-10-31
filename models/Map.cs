@@ -55,6 +55,9 @@ namespace NodeTesting.models
         public int TileSizeX => TileWidth;
         public int TileSizeY => TileHeight;
 
+        /// <summary>The map's area in world pixels, e.g. for <see cref="Camera.SetBounds"/>.</summary>
+        public Rectangle PixelBounds => new Rectangle(0, 0, MapWidth * TileWidth, MapHeight * TileHeight);
+
         protected Map(string texturePath, int tileWidth, int tileHeight)
         {
             TileWidth = tileWidth;

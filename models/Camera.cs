@@ -12,6 +12,10 @@ namespace NodeTesting.models
     /// <br /><br />
     /// Use <see cref="MoveTo"/> to direct the camera toward a <see cref="CameraFocus"/> point,
     /// and call <see cref="Update"/> each frame to drive the transition.
+    /// <br /><br />
+    /// The camera views the <see cref="Canvas"/> game layer, so its origin (the screen point
+    /// the camera's <see cref="Position"/> is drawn at) is the center of the canvas, not the window.
+    /// Use <see cref="SetBounds"/> to stop the view from showing anything outside the world.
     /// </remarks>
     public class Camera
     {
@@ -22,19 +26,22 @@ namespace NodeTesting.models
 
         private CameraFocus activeFocus;
         private bool isFocusing;
+        private Rectangle? bounds;
 
         // How close position/zoom need to be before a OneShot focus is considered "arrived"
         private const float ArrivalThreshold = 0.5f;
         private const float ZoomArrivalThreshold = 0.01f;
 
-        public Camera()
+        /// <summary>
+        /// Creates a camera that views the given canvas's game layer.
+        /// </summary>
+        /// <param name="canvas">The canvas the world is drawn on. Its size sets the camera's origin.</param>
+        public Camera(Canvas canvas)
         {
             position = Vector2.Zero;
             zoom = 1f;
             rotation = 0f;
-            origin = new Vector2(
-                Globals.graphics.GraphicsDevice.Viewport.Width / 2,
-                Globals.graphics.GraphicsDevice.Viewport.Height / 2);
+            origin = new Vector2(canvas.Width / 2f, canvas.Height / 2f);
         }
 
         public Vector2 Origin { get => origin; set => origin = value; }
@@ -44,6 +51,21 @@ namespace NodeTesting.models
 
         /// <summary>Whether the camera is currently moving toward or locked on a focus.</summary>
         public bool IsFocusing => isFocusing;
+
+        /// <summary>The world area the view is kept inside, or null if unlimited.</summary>
+        public Rectangle? Bounds => bounds;
+
+        /// <summary>
+        /// Keeps the view inside the given world rectangle (e.g. <see cref="Map.PixelBounds"/>),
+        /// so the camera stops following at the edges instead of showing what's outside.
+        /// Pass null to remove the limit.
+        /// </summary>
+        /// <remarks>Assumes <see cref="Rotation"/> is 0; a rotated view can still show past the edges.</remarks>
+        public void SetBounds(Rectangle? worldBounds)
+        {
+            bounds = worldBounds;
+            position = ClampToBounds(position, zoom);
+        }
 
         /// <summary>
         /// Directs the camera to move toward the given <see cref="CameraFocus"/>.
@@ -80,34 +102,11 @@ namespace NodeTesting.models
         /// <param name="gameTime">The current game time.</param>
         public void Update(GameTime gameTime)
         {
-            if (!isFocusing || activeFocus == null)
-                return;
+            if (isFocusing && activeFocus != null)
+                UpdateFocus();
 
-            if (activeFocus.Mode == FocusMode.Instant)
-            {
-                // Persistent instant: keep snapping (e.g. the focus Position may be moving)
-                ApplyFocusInstant(activeFocus);
-                return;
-            }
-
-            // Smooth lerp
-            float speed = activeFocus.TransitionSpeed;
-            position = Vector2.Lerp(position, activeFocus.Position, speed);
-            zoom = MathHelper.Lerp(zoom, activeFocus.TargetZoom, speed);
-
-            // For OneShot, release once close enough
-            if (activeFocus.Anchor == FocusAnchor.OneShot)
-            {
-                bool posArrived = Vector2.Distance(position, activeFocus.Position) < ArrivalThreshold;
-                bool zoomArrived = System.MathF.Abs(zoom - activeFocus.TargetZoom) < ZoomArrivalThreshold;
-
-                if (posArrived && zoomArrived)
-                {
-                    ApplyFocusInstant(activeFocus); // snap clean on arrival
-                    isFocusing = false;
-                    activeFocus = null;
-                }
-            }
+            // Runs every frame, so Position/Zoom set directly are kept in bounds too
+            position = ClampToBounds(position, zoom);
         }
 
         /// <summary>
@@ -135,10 +134,68 @@ namespace NodeTesting.models
 
         // ─── Private helpers ────────────────────────────────────────────────
 
+        private void UpdateFocus()
+        {
+            if (activeFocus.Mode == FocusMode.Instant)
+            {
+                // Persistent instant: keep snapping (e.g. the focus Position may be moving)
+                ApplyFocusInstant(activeFocus);
+                return;
+            }
+
+            // Aim for where the camera can actually reach, so a OneShot focus near
+            // the edge still "arrives" instead of chasing an out-of-bounds point forever
+            Vector2 target = ClampToBounds(activeFocus.Position, activeFocus.TargetZoom);
+
+            // Smooth lerp
+            float speed = activeFocus.TransitionSpeed;
+            position = Vector2.Lerp(position, target, speed);
+            zoom = MathHelper.Lerp(zoom, activeFocus.TargetZoom, speed);
+
+            // For OneShot, release once close enough
+            if (activeFocus.Anchor == FocusAnchor.OneShot)
+            {
+                bool posArrived = Vector2.Distance(position, target) < ArrivalThreshold;
+                bool zoomArrived = System.MathF.Abs(zoom - activeFocus.TargetZoom) < ZoomArrivalThreshold;
+
+                if (posArrived && zoomArrived)
+                {
+                    ApplyFocusInstant(activeFocus); // snap clean on arrival
+                    isFocusing = false;
+                    activeFocus = null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns the closest camera position to <paramref name="point"/> whose view
+        /// (at <paramref name="atZoom"/>) stays inside <see cref="Bounds"/>.
+        /// </summary>
+        private Vector2 ClampToBounds(Vector2 point, float atZoom)
+        {
+            if (bounds == null)
+                return point;
+
+            Rectangle b = bounds.Value;
+
+            // How much of the world is visible either side of the camera's center
+            Vector2 halfView = origin / atZoom;
+
+            // If the world is smaller than the view on an axis, center it on that axis instead
+            point.X = b.Width <= halfView.X * 2
+                ? b.Center.X
+                : MathHelper.Clamp(point.X, b.Left + halfView.X, b.Right - halfView.X);
+            point.Y = b.Height <= halfView.Y * 2
+                ? b.Center.Y
+                : MathHelper.Clamp(point.Y, b.Top + halfView.Y, b.Bottom - halfView.Y);
+
+            return point;
+        }
+
         private void ApplyFocusInstant(CameraFocus focus)
         {
-            position = focus.Position;
             zoom = focus.TargetZoom;
+            position = ClampToBounds(focus.Position, zoom);
         }
     }
 }
