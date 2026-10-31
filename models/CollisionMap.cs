@@ -164,27 +164,6 @@ namespace NodeTesting.models
         }
 
         /// <summary>
-        /// Override Draw - draws the collision tiles (0 values) so you can see them for debugging
-        /// </summary>
-        public override void Draw()
-        {
-            for (int row = 0; row < MapHeight; row++)
-            {
-                for (int col = 0; col < MapWidth; col++)
-                {
-                    int tileId = MapData[row, col];
-                    // Draw only collision tiles (0) and any other non-negative tiles
-                    // Skip -1 because those are empty spaces
-                    if (tileId >= 0 && TileSources.ContainsKey(tileId))
-                    {
-                        Vector2 position = new Vector2(col * TileWidth, row * TileHeight);
-                        Globals.spriteBatch.Draw(Texture, position, TileSources[tileId], Color.White);
-                    }
-                }
-            }
-        }
-
-        /// <summary>
         /// Draws all collision rectangles for debugging purposes
         /// </summary>
         public void DrawAllCollisionRects(Color color)

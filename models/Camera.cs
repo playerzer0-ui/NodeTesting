@@ -56,6 +56,34 @@ namespace NodeTesting.models
         public Rectangle? Bounds => bounds;
 
         /// <summary>
+        /// The world area currently on screen, in world pixels. Accounts for zoom and rotation
+        /// (when rotated it's the box around the tilted view). Pass it to
+        /// <see cref="Map.Draw(Rectangle)"/> to skip off-screen tiles.
+        /// </summary>
+        public Rectangle VisibleArea
+        {
+            get
+            {
+                // The canvas spans (0,0) to 2 * origin; map its corners back into the world
+                Matrix toWorld = Matrix.Invert(Transform());
+                Vector2 size = origin * 2f;
+                Vector2 a = Vector2.Transform(Vector2.Zero, toWorld);
+                Vector2 b = Vector2.Transform(new Vector2(size.X, 0), toWorld);
+                Vector2 c = Vector2.Transform(new Vector2(0, size.Y), toWorld);
+                Vector2 d = Vector2.Transform(size, toWorld);
+
+                Vector2 min = Vector2.Min(Vector2.Min(a, b), Vector2.Min(c, d));
+                Vector2 max = Vector2.Max(Vector2.Max(a, b), Vector2.Max(c, d));
+
+                int left = (int)System.MathF.Floor(min.X);
+                int top = (int)System.MathF.Floor(min.Y);
+                return new Rectangle(left, top,
+                    (int)System.MathF.Ceiling(max.X) - left,
+                    (int)System.MathF.Ceiling(max.Y) - top);
+            }
+        }
+
+        /// <summary>
         /// Keeps the view inside the given world rectangle (e.g. <see cref="Map.PixelBounds"/>),
         /// so the camera stops following at the edges instead of showing what's outside.
         /// Pass null to remove the limit.

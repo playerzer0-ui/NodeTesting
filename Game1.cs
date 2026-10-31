@@ -31,7 +31,6 @@ namespace NodeTesting
         TileMap tilemap;
 
         SpriteAnimation spriteAnimation;
-        SpriteAnimationMultiRow spriteAnimationMultiRow;
 
         Camera camera;
         Canvas canvas;
@@ -71,14 +70,12 @@ namespace NodeTesting
             camera = new Camera(canvas);
 
             spriteAnimation = new SpriteAnimation("singlesprite", 4, 8);
-            spriteAnimationMultiRow = new SpriteAnimationMultiRow("multirow", 16, 16, 4, 2);
-            spriteAnimationMultiRow.AddState("walk", 0);
-            spriteAnimationMultiRow.Play("walk");
 
 
             tilemap = new TileMap("tilemap", 16, 16, "tilemap.csv");
             tilemap.RegisterAnimation(20, new int[] { 20, 21, 22, 23 }, 0.15f);
             tilemap.RegisterAnimation(28, new int[] { 28, 29, 30, 31 }, 0.15f);
+            camera.SetBounds(tilemap.PixelBounds);
 
             WallRect = new CollisionRect(500, 500, 100, 100);
             WallCircle = new CollisionCircle(600, 500, 50);
@@ -129,9 +126,8 @@ namespace NodeTesting
             }
 
             spriteAnimation.Update(gameTime);
-            spriteAnimationMultiRow.Update(gameTime);
 
-            camera.SetBounds(new Rectangle(0, 0, 2000, 2000));
+            //camera.SetBounds(new Rectangle(0, 0, 2000, 2000)); // test bounds; overrides the tilemap bounds every frame
 
             tilemap.Update(gameTime);
             platform.Update(gameTime);
@@ -147,7 +143,7 @@ namespace NodeTesting
             canvas.Activate();
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
 
-            tilemap.Draw();
+            tilemap.Draw(camera.VisibleArea);
             player.Draw(Color.White);
             player.Rect.Draw(new Color(255, 0, 0, 128));
             stepHere.Draw(new Color(0, 0, 255, 128));
@@ -158,7 +154,7 @@ namespace NodeTesting
                 wall.Draw(Color.Purple);
             platform.Draw();
 
-            spriteAnimationMultiRow.Draw();
+            spriteAnimation.Draw();
 
             //_spriteBatch.DrawString(font, "distance: " + Vector2.Distance(circle.Center, player.Rect.Pos), new Vector2(10, 10), Color.White);
             //_spriteBatch.DrawString(font, "left: " + player.Rect.Rect.Left, new Vector2(10, 30), Color.White);

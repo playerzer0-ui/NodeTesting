@@ -16,7 +16,7 @@ All models live in the `NodeTesting.models` namespace.
 - Sprites
   - [Sprite](#sprite)
   - [SpriteSheet](#spritesheet)
-  - [SpriteAnimation & SpriteAnimationMultiRow](#-spriteanimation--spriteanimationmultirow)
+  - [SpriteAnimation](#-spriteanimation)
 - Maps
   - [TileMap](#-tilemap)
   - [CollisionMap](#-collisionmap)
@@ -53,6 +53,7 @@ Globals.graphics = _graphics;
 | `Globals.spriteBatch` | `SpriteBatch` | Every model's `Draw()` draws with this |
 | `Globals.graphics` | `GraphicsDeviceManager` | Used by `Canvas.SetResolution` |
 | `Globals.Input` | `InputManager` | A ready-made input manager (see [InputManager](#-inputmanager)) |
+| `Globals.Pixel` | `Texture2D` | A shared 1×1 white texture for drawing boxes and lines. Created on first use. |
 
 > Models load their textures in their constructors, so create them **after** `Globals` is set.
 
@@ -77,7 +78,7 @@ protected override void Draw(GameTime gameTime)
     // 1. Game layer: fixed resolution, pixel-art friendly
     canvas.Activate();
     _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
-    tilemap.Draw();
+    tilemap.Draw(camera.VisibleArea); // only the tiles on screen
     player.Draw(Color.White);
     _spriteBatch.End();
 
@@ -175,6 +176,7 @@ camera = new Camera(canvas);   // create the canvas first
 | `Origin` | Screen point the camera is centered on |
 | `IsFocusing` | `true` while moving toward or locked on a focus |
 | `Bounds` | The world area the view is kept inside, or `null` |
+| `VisibleArea` | The world area currently on screen (accounts for zoom and rotation). Pass it to `tilemap.Draw(...)` to skip off-screen tiles. |
 
 #### Methods
 
@@ -260,53 +262,42 @@ A horizontal strip of equally sized frames in one texture.
 
 ---
 
-## 🏃 SpriteAnimation & SpriteAnimationMultiRow
+## 🏃 SpriteAnimation
 
-Frame-based animation from a sprite sheet. `SpriteAnimationMultiRow` supports a sheet where **each row is a different state** (idle, walk, jump…). `SpriteAnimation` is the single-row shortcut.
+Frame-based animation from a **single-row strip**: one texture with equally sized frames laid out left to right. Use one strip per animation (e.g. `hero_idle`, `hero_walk`).
 
-#### Constructors
+#### Constructor
 
 **public SpriteAnimation(string texturePath, int frames, int fps)**
-- A one-row strip with `frames` frames, playing at `fps`.
-
-**public SpriteAnimationMultiRow(string texturePath, int frameWidth, int frameHeight, int columns, int rows)**
-- frameWidth / frameHeight: size of one frame in pixels.
-- columns / rows: grid size of the sheet.
-
-**public SpriteAnimationMultiRow(string texturePath, int columns, int rows)**
-- Same, but the frame size is worked out from the texture size.
+- texturePath: the path to the texture in the Content folder.
+- frames: how many frames are in the strip. Frame width = texture width ÷ frames.
+- fps: playback speed in frames per second.
 
 #### Fields
 
-`Position`, `Color`, `Scale`, `Rotation`, `Origin` and `SpriteEffect` control how it is drawn.
+`Position`, `Color`, `Scale`, `Rotation`, `Origin` and `SpriteEffect` control how it is drawn. `FrameIndex`, `IsFinished` and `IsReversed` hold the playback state.
 
 #### Methods
 
 | Method | Description |
 |---|---|
-| `AddState(string name, int rowIndex, int frameCount, int fps = 8, bool looping = true, int startFrame = 0)` | Adds a named state using a row of the sheet |
-| `AddState(string name, int rowIndex, int fps = 8, bool looping = true)` | Same, using every column in the row |
-| `Play(string stateName, bool restart = true)` | Switches to a state |
 | `Update(GameTime)` | Advances the animation (loops) |
 | `UpdateOnce(GameTime)` | Advances without looping (stops on the last frame) |
 | `Draw()` | Draws the current frame |
 | `DrawFrame(int index)` | Draws a specific frame |
 | `SetFrame(int frameIndex)` | Jumps to a frame |
-| `Reset()` | Back to the start of the current state |
+| `Reset()` | Back to the first frame |
 | `ToggleReverse()` | Plays backwards / forwards |
-| `GetCurrentState()` | Name of the playing state |
-| `IsAnimationFinished()` | `true` when a non-looping state has ended |
+| `IsAnimationFinished()` | `true` once `UpdateOnce` has reached the end |
 | `GetCurrentFrameRect()`, `GetFrameRect(int index)` | Source rectangles in the texture |
-| `GetRowCount()`, `GetColumnCount()`, `GetTotalFrames()` | Sheet info |
+| `GetTotalFrames()` | Number of frames in the strip |
 
 ```csharp
-var hero = new SpriteAnimationMultiRow("hero", 16, 16, 4, 2);
-hero.AddState("idle", 0);
-hero.AddState("walk", 1, fps: 12);
-hero.Play("walk");
+var walk = new SpriteAnimation("hero_walk", 4, 12);
+walk.Position = new Vector2(100, 100);
 
-// Update: hero.Update(gameTime);
-// Draw:   hero.Draw();
+// Update: walk.Update(gameTime);
+// Draw:   walk.Draw();
 ```
 
 ---
@@ -328,7 +319,8 @@ The CSV is looked up in the working directory and in `Content/`. Mark it as *Cop
 |---|---|
 | `RegisterAnimation(int baseTileId, int[] frameTileIds, float frameDurationSeconds)` | Every cell with `baseTileId` cycles through `frameTileIds` |
 | `Update(GameTime)` | Advances tile animations. Call once per frame. |
-| `Draw()` | Draws the map |
+| `Draw()` | Draws the whole map |
+| `Draw(Rectangle visibleArea)` | Draws only the tiles inside `visibleArea` (world pixels). Use `camera.VisibleArea`. |
 | `PixelBounds` | The map's area in world pixels, e.g. for `camera.SetBounds(tilemap.PixelBounds)` |
 
 ```csharp
@@ -352,7 +344,7 @@ A map used for collision instead of visuals. In its CSV, **`0` means solid**. Ea
 | `GetIntersectingTiles(Rectangle target)` | Grid positions of the tiles a rectangle overlaps |
 | `ResolveCollisionHorizontal(ref Rectangle rect, float velocityX)` | Pushes `rect` out of walls on the X axis |
 | `ResolveCollisionVertical(ref Rectangle rect, float velocityY)` | Pushes `rect` out of walls on the Y axis |
-| `Draw()` | Draws the solid tiles (debugging) |
+| `Draw()` / `Draw(Rectangle visibleArea)` | Draws the map's tiles (debugging), same as [TileMap](#-tilemap) |
 | `DrawAllCollisionRects(Color color)` | Draws every collision rectangle (debugging) |
 
 > Move and resolve one axis at a time: apply X velocity → `ResolveCollisionHorizontal`, then Y velocity → `ResolveCollisionVertical`.

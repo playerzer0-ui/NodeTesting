@@ -12,7 +12,6 @@ namespace NodeTesting.models
     {
         private Vector2 center;
         private int radius;
-        private Texture2D pixel;
         private int offsetX;
         private int offsetY;
 
@@ -26,8 +25,6 @@ namespace NodeTesting.models
         {
             this.center = new Vector2(x, y);
             this.radius = radius;
-            pixel = new Texture2D(Globals.graphics.GraphicsDevice, 1, 1);
-            pixel.SetData(new[] { Color.White });
         }
 
         /// <summary>
@@ -148,7 +145,7 @@ namespace NodeTesting.models
             float length = delta.Length();
 
             Globals.spriteBatch.Draw(
-                pixel,
+                Globals.Pixel,
                 start,
                 null,
                 color,
@@ -204,8 +201,13 @@ namespace NodeTesting.models
             float dist = (float)Math.Sqrt(distSq);
             // Push the rect away from this circle
             Vector2 push = (dist > 0 ? delta / dist : Vector2.UnitY) * (radius - dist);
-            moving.Translate((int)push.X, (int)push.Y);
-            return push;
+
+            // The rect lives on whole pixels, so round the push away from the circle.
+            // Plain (int) truncation turns pushes under 1px into 0 and leaves the rect overlapping.
+            int pushX = (int)(Math.Sign(push.X) * Math.Ceiling(Math.Abs(push.X)));
+            int pushY = (int)(Math.Sign(push.Y) * Math.Ceiling(Math.Abs(push.Y)));
+            moving.Translate(pushX, pushY);
+            return new Vector2(pushX, pushY);
         }
     }
 

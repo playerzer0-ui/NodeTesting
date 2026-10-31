@@ -154,11 +154,24 @@ namespace NodeTesting.models
             }
         }
 
-        public virtual void Draw()
+        /// <summary>Draws the whole map.</summary>
+        public void Draw() => Draw(PixelBounds);
+
+        /// <summary>
+        /// Draws only the tiles that overlap <paramref name="visibleArea"/> (in world pixels).
+        /// Pass <see cref="Camera.VisibleArea"/> to skip everything off screen.
+        /// </summary>
+        public virtual void Draw(Rectangle visibleArea)
         {
-            for (int row = 0; row < MapHeight; row++)
+            // Tile range covered by the area, clamped to the map
+            int firstCol = System.Math.Max(0, FloorDiv(visibleArea.Left, TileWidth));
+            int firstRow = System.Math.Max(0, FloorDiv(visibleArea.Top, TileHeight));
+            int lastCol = System.Math.Min(MapWidth - 1, FloorDiv(visibleArea.Right - 1, TileWidth));
+            int lastRow = System.Math.Min(MapHeight - 1, FloorDiv(visibleArea.Bottom - 1, TileHeight));
+
+            for (int row = firstRow; row <= lastRow; row++)
             {
-                for (int col = 0; col < MapWidth; col++)
+                for (int col = firstCol; col <= lastCol; col++)
                 {
                     int tileId = MapData[row, col];
 
@@ -176,5 +189,9 @@ namespace NodeTesting.models
                 }
             }
         }
+
+        // Integer division that rounds toward negative infinity, so areas left of / above 0 work
+        private static int FloorDiv(int value, int divisor) =>
+            (int)System.Math.Floor((double)value / divisor);
     }
 }

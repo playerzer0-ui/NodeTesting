@@ -2,16 +2,14 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using NodeTesting.models;
 
-namespace spotthedifference
+namespace NodeTesting.models
 {
     /// <summary>A single-line input. Create in LoadContent and draw inside SpriteBatch.Begin/End.</summary>
     public sealed class TextInput : IDisposable
     {
         private readonly Game game;
         private readonly SpriteFont font;
-        private readonly Texture2D pixel;
         private MouseState previousMouse;
         private KeyboardState previousKeys;
         private string text = "";
@@ -63,8 +61,6 @@ namespace spotthedifference
             this.font = font;
             Collider = collider ?? throw new ArgumentNullException(nameof(collider));
             Placeholder = placeholder;
-            pixel = new Texture2D(game.GraphicsDevice, 1, 1);
-            pixel.SetData(new[] { Color.White });
             game.Window.TextInput += OnTextInput;
             game.Deactivated += OnDeactivated;
         }
@@ -208,7 +204,7 @@ namespace spotthedifference
             SpriteBatch batch = Globals.spriteBatch;
             Color border = IsFocused ? PicoPallete.yellow : PicoPallete.dark_blue;
             Collider.Draw(border);
-            batch.Draw(pixel, new Rectangle(Bounds.X + 2, Bounds.Y + 2,
+            batch.Draw(Globals.Pixel, new Rectangle(Bounds.X + 2, Bounds.Y + 2,
                 Math.Max(0, Bounds.Width - 4), Math.Max(0, Bounds.Height - 4)), PicoPallete.white);
 
             float availableWidth = Math.Max(0, Bounds.Width - Padding * 2 - 2);
@@ -223,7 +219,7 @@ namespace spotthedifference
             if (IsFocused && blinkTime < 0.5f)
             {
                 int x = Bounds.X + Padding + (int)MathF.Round(Measure(visibleStart, caret));
-                batch.Draw(pixel, new Rectangle(x, (int)y, 2, font.LineSpacing), PicoPallete.black);
+                batch.Draw(Globals.Pixel, new Rectangle(x, (int)y, 2, font.LineSpacing), PicoPallete.black);
             }
         }
 
@@ -233,7 +229,6 @@ namespace spotthedifference
             disposed = true;
             game.Window.TextInput -= OnTextInput;
             game.Deactivated -= OnDeactivated;
-            pixel.Dispose();
         }
     }
 }
