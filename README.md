@@ -474,7 +474,7 @@ if (Globals.Input.JustPressed("Jump"))
 
 ## 🛤️ Path2D
 
-A list of waypoints something can travel along, with looping, ping-pong, reversing and per-waypoint delays.
+A list of waypoints something can travel along, with curves, looping, ping-pong, reversing and per-waypoint delays. It always moves at exactly `Speed`, however close together the waypoints are.
 
 #### Constructors
 
@@ -490,7 +490,7 @@ A list of waypoints something can travel along, with looping, ping-pong, reversi
 |---|---|
 | `Position` | Current position on the path. Copy it to your sprite each frame. |
 | `Speed` | Pixels per second |
-| `CurrentWaypointIndex` | The waypoint being moved toward |
+| `CurrentWaypointIndex` | The waypoint being moved toward. Curves are made of many small waypoints, so it counts those too. |
 | `IsLooping` | Go back to the start after the last point |
 | `IsPingPong` | Turn around at each end |
 | `IsReversed` | Currently travelling backwards |
@@ -502,10 +502,12 @@ A list of waypoints something can travel along, with looping, ping-pong, reversi
 | Method | Description |
 |---|---|
 | `AddWaypoint(Vector2 point, float delay = 0f)` | Appends a point; `delay` = seconds to wait there |
+| `AddCurve(Vector2 control, Vector2 end, float delay = 0f)` | Curves from the last waypoint to `end`, bent toward `control` (quadratic Bezier) |
+| `AddCurve(Vector2 control1, Vector2 control2, Vector2 end, float delay = 0f)` | Same with two control points (cubic Bezier): `control1` shapes the start, `control2` the end. Allows S-shapes and circles. |
 | `Update(GameTime)` | Moves along the path. Call once per frame. |
-| `ReversePath()` | Reverses the waypoint order without a visible jump |
-| `ReverseDirection()` | Flips the travel direction without reordering |
-| `Reset()` | Back to the start |
+| `ReversePath()` | Reverses the waypoint order and turns around on the spot, heading back to the waypoint it just came from |
+| `ReverseDirection()` | Flips the travel direction (without reordering) and turns around on the spot |
+| `Reset()` | Back to the first waypoint, travelling forwards |
 | `Clear()` | Removes all waypoints |
 
 ```csharp
@@ -516,6 +518,36 @@ patrol.IsPingPong = true;
 
 // Update: patrol.Update(gameTime); enemy.Position = patrol.Position;
 ```
+
+#### Curves
+
+A curve starts at the last waypoint, so add a starting point first. The path doesn't touch the control points; it's pulled toward them, like a rope bent toward a magnet.
+
+```csharp
+var swoop = new Path2D();
+swoop.AddWaypoint(new Vector2(100, 400));
+swoop.AddCurve(new Vector2(300, 200), new Vector2(500, 400));                      // a hump
+swoop.AddCurve(new Vector2(600, 400), new Vector2(600, 600), new Vector2(800, 600)); // ease down a slope
+swoop.AddWaypoint(new Vector2(1000, 600));                                          // straight again
+```
+
+**A circle** is four cubic curves, one per quarter. Put the control points `0.5523 × radius` along each quarter's tangent:
+
+```csharp
+Vector2 c = new Vector2(400, 300);  // center
+float r = 100;                      // radius
+float k = 0.5523f * r;
+
+var orbit = new Path2D();
+orbit.AddWaypoint(c + new Vector2(r, 0));
+orbit.AddCurve(c + new Vector2(r, k),   c + new Vector2(k, r),   c + new Vector2(0, r));
+orbit.AddCurve(c + new Vector2(-k, r),  c + new Vector2(-r, k),  c + new Vector2(-r, 0));
+orbit.AddCurve(c + new Vector2(-r, -k), c + new Vector2(-k, -r), c + new Vector2(0, -r));
+orbit.AddCurve(c + new Vector2(k, -r),  c + new Vector2(r, -k),  c + new Vector2(r, 0));
+orbit.IsLooping = true;
+```
+
+This stays within 0.03% of a true circle. Pauses (`delay`) only happen at a curve's `end`, never partway along it.
 
 ---
 

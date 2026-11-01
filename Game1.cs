@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework.Input;
 using Microsoft.Xna.Framework.Media;
 using NodeTesting.models;
 using System;
+using System.Collections.Generic;
 
 namespace NodeTesting
 {
@@ -31,9 +32,11 @@ namespace NodeTesting
         TileMap tilemap;
 
         SpriteAnimation spriteAnimation;
-
         Camera camera;
         Canvas canvas;
+
+        Path2D fewPoints;
+        Path2D manyPoints;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
@@ -82,6 +85,15 @@ namespace NodeTesting
             WallRect.IsStatic = true;
             WallCircle.IsStatic = true;
 
+            // Red: just a start and an end
+            fewPoints = new Path2D(new List<Vector2> { new(100, 200), new(700, 200) }, speed: 600);
+
+            // Yellow: the same line, with a waypoint every 4 pixels
+            var dense = new List<Vector2>();
+            for (int x = 100; x <= 700; x += 4)
+                dense.Add(new Vector2(x, 240));
+            manyPoints = new Path2D(dense, speed: 600);
+
 
             //shaders
             monochromeShader = Content.Load<Effect>("FileX");
@@ -127,7 +139,15 @@ namespace NodeTesting
 
             spriteAnimation.Update(gameTime);
 
-            //camera.SetBounds(new Rectangle(0, 0, 2000, 2000)); // test bounds; overrides the tilemap bounds every frame
+            fewPoints.Update(gameTime);
+            manyPoints.Update(gameTime);
+
+            // Press R to restart the race
+            if (Globals.Input.KeyJustDown(Keys.R))
+            {
+                fewPoints.Reset();
+                manyPoints.Reset();
+            }
 
             tilemap.Update(gameTime);
             platform.Update(gameTime);
@@ -153,6 +173,9 @@ namespace NodeTesting
             foreach (ICollider wall in walls)
                 wall.Draw(Color.Purple);
             platform.Draw();
+
+            _spriteBatch.Draw(Globals.Pixel, new Rectangle((int)fewPoints.Position.X - 5, (int)fewPoints.Position.Y - 5, 10, 10), Color.Red);
+            _spriteBatch.Draw(Globals.Pixel, new Rectangle((int)manyPoints.Position.X - 5, (int)manyPoints.Position.Y - 5, 10, 10), Color.Yellow);
 
             spriteAnimation.Draw();
 
