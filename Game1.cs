@@ -111,6 +111,7 @@ namespace NodeTesting
             lighting.Add(new PointLight(new Vector2(390, 130), 110, new Color(255, 140, 60)));   // orange lamp
             lighting.Add(new PointLight(new Vector2(470, 210), 90, new Color(90, 150, 255)));    // blue lamp
             lighting.Add(new PointLight(new Vector2(550, 420), 260, new Color(230, 230, 255)));  // lamp above the two walls
+            lighting.Add(new PointLight(new Vector2(3000, 3000), 200, Color.Red));                // far away: never on screen, so never drawn
 
             // Walls and ice painted as tiles; each kind is merged into a few big rectangles
             collisionMap = new CollisionMap("tilemap", 16, 16, "collision.csv");
@@ -293,6 +294,8 @@ namespace NodeTesting
             // 2. UI layer: 1920x1080 coordinates, stays crisp at any window size
             canvas.BeginUI(_spriteBatch);
             _spriteBatch.DrawString(font, "Hello", new Vector2(40, 40), Color.White);
+            _spriteBatch.DrawString(font, $"Lights drawn: {lighting.DrawnLightCount} / {lighting.Lights.Count}",
+                                    new Vector2(40, 980), Color.White, 0f, Vector2.Zero, 0.3f, SpriteEffects.None, 0f);
             canvas.EndUI(_spriteBatch);
 
             // 3. Composite both to the screen (optionally pass a shader for the game layer)

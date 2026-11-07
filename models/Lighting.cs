@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
@@ -39,11 +39,17 @@ namespace NodeTesting.models
 
         private readonly GraphicsDevice graphicsDevice;
         private readonly RenderTarget2D lightMap;
+        private readonly Vector2 canvasSize;
         private readonly RenderTarget2D singleLight;   // one shadowed light at a time
         private readonly Texture2D glow;
         private readonly BasicEffect shadowEffect;
-        private readonly List<VertexPositionColor> shadowVertices = new List<VertexPositionColor>();
         private readonly List<Vector2> polygon = new List<Vector2>();
+
+        // Reused every frame so drawing doesn't create garbage for the GC to clean up
+        private readonly List<PointLight> shadowedLights = new List<PointLight>();
+        private VertexPositionColor[] shadowVertices = new VertexPositionColor[512];
+        private int shadowVertexCount;
+        private RenderTargetBinding[] savedTargets = Array.Empty<RenderTargetBinding>();
 
         // Lights add their glow on top of each other
         private static readonly BlendState AddLight = new BlendState
@@ -103,11 +109,18 @@ namespace NodeTesting.models
         /// </summary>
         public List<ICollider> Occluders { get; } = new List<ICollider>();
 
+        /// <summary>
+        /// How many lights were actually drawn last frame. Lights whose glow doesn't reach the
+        /// screen are skipped (they're still on, and still count for <see cref="GetLightAt"/>).
+        /// </summary>
+        public int DrawnLightCount { get; private set; }
+
         /// <param name="canvas">The canvas whose game layer is lit. The light map matches its size.</param>
         /// <param name="graphicsDevice">The game's graphics device.</param>
         public Lighting(Canvas canvas, GraphicsDevice graphicsDevice)
         {
             this.graphicsDevice = graphicsDevice;
+            canvasSize = new Vector2(canvas.Width, canvas.Height);
 
             // PreserveContents: the light map is switched away from and back to once per shadowed light
             lightMap = new RenderTarget2D(graphicsDevice, canvas.Width, canvas.Height, false,
@@ -155,23 +168,28 @@ namespace NodeTesting.models
         /// <param name="cameraTransform">The same camera matrix the world was drawn with.</param>
         public void Draw(SpriteBatch spriteBatch, Matrix cameraTransform)
         {
+            DrawnLightCount = 0;
             if (!Enabled)
                 return;
 
-            RenderTargetBinding[] previousTargets = graphicsDevice.GetRenderTargets();
+            // The part of the world on screen: lights that don't reach it are skipped
+            GetVisibleArea(cameraTransform, out Vector2 viewMin, out Vector2 viewMax);
+
+            SaveRenderTargets();
 
             // 1. Ambient, plus every light with nothing in its way, in one batch
             graphicsDevice.SetRenderTarget(lightMap);
             graphicsDevice.Clear(Ambient);
 
-            var shadowedLights = new List<PointLight>();
+            shadowedLights.Clear();
             spriteBatch.Begin(blendState: AddLight, samplerState: SamplerState.LinearClamp,
                               transformMatrix: cameraTransform);
             foreach (PointLight light in Lights)
             {
-                if (!IsVisible(light))
+                if (!IsVisible(light) || !ReachesView(light, viewMin, viewMax))
                     continue;
 
+                DrawnLightCount++;
                 if (light.CastsShadows && HasOccluderInRange(light))
                     shadowedLights.Add(light);
                 else
@@ -199,7 +217,7 @@ namespace NodeTesting.models
             }
 
             // 3. Back to the game layer, and multiply it by the light map
-            graphicsDevice.SetRenderTargets(previousTargets);
+            RestoreRenderTargets();
 
             spriteBatch.Begin(blendState: Multiply, samplerState: SamplerState.PointClamp);
             spriteBatch.Draw(lightMap, Vector2.Zero, Color.White);
@@ -250,6 +268,29 @@ namespace NodeTesting.models
         }
 
         // ── Private helpers ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// The box of world space the canvas shows through this camera (the box around the
+        /// view when the camera is rotated).
+        /// </summary>
+        private void GetVisibleArea(Matrix cameraTransform, out Vector2 min, out Vector2 max)
+        {
+            Matrix toWorld = Matrix.Invert(cameraTransform);
+            Vector2 a = Vector2.Transform(Vector2.Zero, toWorld);
+            Vector2 b = Vector2.Transform(new Vector2(canvasSize.X, 0), toWorld);
+            Vector2 c = Vector2.Transform(new Vector2(0, canvasSize.Y), toWorld);
+            Vector2 d = Vector2.Transform(canvasSize, toWorld);
+
+            min = Vector2.Min(Vector2.Min(a, b), Vector2.Min(c, d));
+            max = Vector2.Max(Vector2.Max(a, b), Vector2.Max(c, d));
+        }
+
+        /// <summary>Whether the light's circle touches the visible area at all.</summary>
+        private static bool ReachesView(PointLight light, Vector2 viewMin, Vector2 viewMax)
+        {
+            Vector2 closest = Vector2.Clamp(light.Position, viewMin, viewMax);
+            return Vector2.DistanceSquared(light.Position, closest) < light.Radius * light.Radius;
+        }
 
         /// <summary>Whether any occluder lies on the straight line from the light to the point.</summary>
         private static bool IsBlocked(Vector2 from, Vector2 to, List<ICollider> occluders)
@@ -369,7 +410,7 @@ namespace NodeTesting.models
             shadowEffect.View = cameraTransform;
 
             // 1. Mark every occluder in range in the stencil buffer
-            shadowVertices.Clear();
+            shadowVertexCount = 0;
             foreach (ICollider occluder in Occluders)
             {
                 if (!IsInRange(occluder, light) || !GetOutline(occluder))
@@ -382,7 +423,7 @@ namespace NodeTesting.models
             DrawTriangles(NoColor, MarkOccluders);
 
             // 2. Shadow bands, only where no occluder was marked
-            shadowVertices.Clear();
+            shadowVertexCount = 0;
             foreach (ICollider occluder in Occluders)
             {
                 if (!IsInRange(occluder, light) || !GetOutline(occluder))
@@ -415,18 +456,36 @@ namespace NodeTesting.models
 
         private void DrawTriangles(BlendState blendState, DepthStencilState depthStencilState)
         {
-            if (shadowVertices.Count == 0)
+            if (shadowVertexCount == 0)
                 return;
 
             graphicsDevice.BlendState = blendState;
             graphicsDevice.DepthStencilState = depthStencilState;
 
-            VertexPositionColor[] vertices = shadowVertices.ToArray();
-            foreach (EffectPass pass in shadowEffect.CurrentTechnique.Passes)
+            EffectPassCollection passes = shadowEffect.CurrentTechnique.Passes;
+            for (int i = 0; i < passes.Count; i++)
             {
-                pass.Apply();
-                graphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, vertices, 0, vertices.Length / 3);
+                passes[i].Apply();
+                graphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, shadowVertices, 0, shadowVertexCount / 3);
             }
+        }
+
+        /// <summary>Remembers the current render target(s), reusing the same array every frame.</summary>
+        private void SaveRenderTargets()
+        {
+            int count = graphicsDevice.RenderTargetCount;
+            if (savedTargets.Length != count)
+                savedTargets = new RenderTargetBinding[count];   // only when the count changes
+            if (count > 0)
+                graphicsDevice.GetRenderTargets(savedTargets);
+        }
+
+        private void RestoreRenderTargets()
+        {
+            if (savedTargets.Length == 0)
+                graphicsDevice.SetRenderTarget(null);   // was drawing straight to the screen
+            else
+                graphicsDevice.SetRenderTargets(savedTargets);
         }
 
         /// <summary>Fills <see cref="polygon"/> with the occluder's outline, clockwise on screen.</summary>
@@ -460,9 +519,13 @@ namespace NodeTesting.models
 
         private void AddTriangle(Vector2 a, Vector2 b, Vector2 c)
         {
-            shadowVertices.Add(new VertexPositionColor(new Vector3(a, 0f), Color.Black));
-            shadowVertices.Add(new VertexPositionColor(new Vector3(b, 0f), Color.Black));
-            shadowVertices.Add(new VertexPositionColor(new Vector3(c, 0f), Color.Black));
+            // Grow the buffer when needed (rare); otherwise reuse it
+            if (shadowVertexCount + 3 > shadowVertices.Length)
+                Array.Resize(ref shadowVertices, shadowVertices.Length * 2);
+
+            shadowVertices[shadowVertexCount++] = new VertexPositionColor(new Vector3(a, 0f), Color.Black);
+            shadowVertices[shadowVertexCount++] = new VertexPositionColor(new Vector3(b, 0f), Color.Black);
+            shadowVertices[shadowVertexCount++] = new VertexPositionColor(new Vector3(c, 0f), Color.Black);
         }
 
         private static Vector2 SafeNormalize(Vector2 v)

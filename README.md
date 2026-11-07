@@ -4,6 +4,8 @@ A small 2D game engine built on top of **MonoGame (DesktopGL)**: a set of models
 
 All models live in the `NodeTesting.models` namespace.
 
+Each section describes the model, then ends with **Scenarios**: common game situations and the code to handle them.
+
 ---
 
 ## Contents
@@ -153,6 +155,56 @@ canvas = new Canvas(GraphicsDevice, Window, 320, 180);
 Vector2 mouseWorld = canvas.ScreenToWorld(camera.Transform());
 ```
 
+#### Scenarios
+
+**A pixel-art game at 320×180.** Pick a resolution that fits common screens a whole number of times (320×180 is ×4 at 1280×720 and ×6 at 1920×1080), so every pixel comes out the same size.
+
+```csharp
+canvas = new Canvas(GraphicsDevice, Window, 320, 180);
+canvas.SetResolution(1280, 720);   // open the window at 4× size
+Window.AllowUserResizing = true;   // any other size gets letterboxed
+```
+
+**Clicking something in the world** (select a unit, open a chest). Convert the mouse to world coordinates and test it against colliders:
+
+```csharp
+MouseState mouse = Mouse.GetState();
+bool clicked = mouse.LeftButton == ButtonState.Pressed && previousMouse.LeftButton == ButtonState.Released;
+previousMouse = mouse;
+
+if (clicked)
+{
+    Point world = canvas.ScreenToWorld(camera.Transform()).ToPoint();
+    foreach (Chest chest in chests)
+        if (chest.Rect.Contains(world))
+            chest.Open();
+}
+```
+
+**Clicking a UI button.** UI positions are in 1920×1080 space, so convert with `ScreenToUI` instead:
+
+```csharp
+var playButton = new CollisionRect(960, 600, 300, 80);   // centered, in UI coordinates
+
+// Update
+Point ui = canvas.ScreenToUI(new Vector2(mouse.X, mouse.Y)).ToPoint();
+if (clicked && playButton.Contains(ui))
+    StartGame();
+
+// Draw, between canvas.BeginUI and canvas.EndUI
+playButton.Draw(playButton.Contains(ui) ? PicoPallete.blue : PicoPallete.dark_blue);
+```
+
+**A CRT or rain shader over the game, but not the HUD.** Pass the effect to `canvas.Draw`; the UI layer is drawn on top afterwards, untouched:
+
+```csharp
+crt = Content.Load<Effect>("CRT_TV");
+
+// Draw, last thing in the frame
+crt.Parameters["Time"].SetValue((float)gameTime.TotalGameTime.TotalSeconds);
+canvas.Draw(_spriteBatch, crt);
+```
+
 ---
 
 ## 🎥 Camera & CameraFocus
@@ -232,6 +284,54 @@ How it works, for a 1280×720 canvas at zoom `1`: the camera sees 640 pixels eit
 - A `OneShot` focus near an edge still arrives: it stops at the closest point the camera can reach.
 - Bounds assume `Rotation` is `0`. A rotated view can still show past the edges.
 
+#### Scenarios
+
+**Follow the player with a soft lag.** Keep one `CameraFocus` and move it. `CameraFocus` is a class, so the camera sees the new position every frame:
+
+```csharp
+// LoadContent
+camera.SetBounds(tilemap.PixelBounds);
+playerFocus = new CameraFocus(player.Pos, targetZoom: 1f, transitionSpeed: 0.15f,
+                              anchor: FocusAnchor.Persistent);
+camera.MoveTo(playerFocus);
+
+// Update, after moving the player
+playerFocus.Position = player.Pos;
+camera.Update(gameTime);
+```
+
+Lower `transitionSpeed` = lazier camera. Use `mode: FocusMode.Instant` for a camera locked rigidly to the player.
+
+**Cutscene: show a door opening, then return to the player.** A `OneShot` focus stops on arrival, and `IsFocusing` turns `false`:
+
+```csharp
+// when the lever is pulled
+camera.MoveTo(new CameraFocus(door.Position, targetZoom: 1.5f, transitionSpeed: 0.05f));
+showingDoor = true;
+doorTimer = 1.5f;
+
+// Update
+if (showingDoor && !camera.IsFocusing)          // arrived at the door
+{
+    doorTimer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+    if (doorTimer <= 0)
+    {
+        showingDoor = false;
+        camera.MoveTo(playerFocus);             // back to following
+    }
+}
+```
+
+**Zoom out when entering a boss room.** Call `MoveTo` every frame with whichever focus applies; a smooth focus just keeps easing toward the newest target:
+
+```csharp
+if (player.Rect.Intersects(bossRoom))
+    camera.MoveTo(new CameraFocus(bossRoom.Center, targetZoom: 0.75f, transitionSpeed: 0.05f,
+                                  anchor: FocusAnchor.Persistent));
+else
+    camera.MoveTo(playerFocus);
+```
+
 ---
 
 ## 💡 Lighting & PointLight
@@ -255,6 +355,7 @@ How it works: each frame a light map the size of the canvas is filled with the `
 | `AddOccluder(ICollider)` / `AddOccluders(IEnumerable<ICollider>)` | Makes colliders block light, e.g. `AddOccluders(walls)` or `AddOccluders(collisionMap.GetCollisionRects())` |
 | `RemoveOccluder(ICollider)` | Stops a collider blocking light |
 | `GetLightAt(Vector2 worldPosition)` | The light reaching one spot (ambient + every light that can see it past the occluders). Use it to tint standing sprites by their feet. Returns white while lighting is off. |
+| `DrawnLightCount` | How many lights were drawn last frame. Lights whose glow doesn't reach the screen are skipped. |
 | `Draw(SpriteBatch, Matrix cameraTransform)` | Builds the light map and applies it. Call after the world's `SpriteBatch.End()` and before `canvas.BeginUI(...)`, with the same camera matrix the world used. |
 
 #### PointLight
@@ -324,7 +425,52 @@ _spriteBatch.End();
 
 A character whose feet are in shadow is dark from head to toe; step into the light and the whole sprite lights up.
 
+**Off-screen lights are skipped when drawing.** A light is only painted if its circle reaches the part of the world on screen, so a huge level with hundreds of lamps only pays for the ones near the camera. Skipped lights are still on: they're drawn again as soon as the camera gets near, and `GetLightAt` always counts every light, so gameplay checks like "is this enemy standing in light?" work anywhere in the level.
+
 Lights with no occluder within their radius cost the same as before. Each light that *does* have one in range needs an extra pass, so prefer `CastsShadows = false` on lots of small lights.
+
+#### Scenarios
+
+**A flickering torch.** Change `Intensity` or `Radius` a little every frame:
+
+```csharp
+torch = lighting.Add(new PointLight(torchPos, 100, new Color(255, 150, 60)));
+
+// Update
+float t = (float)gameTime.TotalGameTime.TotalSeconds;
+torch.Intensity = 0.85f + 0.15f * MathF.Sin(t * 13f) * MathF.Sin(t * 7f);
+torch.Radius = 100f + 3f * MathF.Sin(t * 11f);
+```
+
+**Day/night cycle with street lamps.** Blend `Ambient` between a day and a night color, and switch lamps on when it gets dark:
+
+```csharp
+// Update
+timeOfDay += dt * 0.05f;                                    // one full day every ~2 minutes
+float daylight = (MathF.Sin(timeOfDay) + 1f) / 2f;          // 0 = midnight, 1 = noon
+lighting.Ambient = Color.Lerp(new Color(25, 25, 45), Color.White, daylight);
+
+foreach (PointLight lamp in streetLamps)
+    lamp.Enabled = daylight < 0.4f;
+```
+
+**Stealth: can the guard see the player?** `GetLightAt` works anywhere in the level, on or off screen:
+
+```csharp
+Color light = lighting.GetLightAt(player.Rect.Center);
+float brightness = (light.R + light.G + light.B) / (3f * 255f);
+bool hiddenInShadow = brightness < 0.25f;
+```
+
+**A door that blocks light while closed:**
+
+```csharp
+lighting.AddOccluder(door.Rect);          // closed: light stops at the door
+// when it opens:
+lighting.RemoveOccluder(door.Rect);       // light spills into the next room
+```
+
+**A lantern pickup that widens the player's light:** `playerLight.Radius = hasLantern ? 180 : 60;`
 
 ---
 
@@ -338,6 +484,48 @@ A single texture drawn at a position.
 
 **public void Draw(Color color)**
 - color: the color to draw the sprite with (usually `Color.White`).
+
+| Member | Description |
+|---|---|
+| `Pos` | Where the sprite is drawn. The texture's `Origin` lands on this point. |
+| `Origin` | The point of the texture placed at `Pos`. Defaults to the **center** of the texture. |
+
+#### Scenarios
+
+**A full-screen background.** Move the origin to the top-left corner so `Pos` is the corner:
+
+```csharp
+background = new Sprite("background", Vector2.Zero);
+background.Origin = Vector2.Zero;
+```
+
+**Something that stands on the ground** (characters, trees, signs). Put the origin at the bottom-middle so `Pos` is the feet, which also matches [ObjectMap](#-objectmap) positions:
+
+```csharp
+sign = new Sprite("sign", position);
+sign.Origin = new Vector2(8, 16);   // bottom-middle of a 16×16 image
+```
+
+**Flash red when hurt, or fade out.** The draw color is a tint:
+
+```csharp
+hero.Draw(hurtTimer > 0 ? Color.Red : Color.White);
+ghost.Draw(Color.White * 0.5f);     // half transparent
+```
+
+**A game object that is a sprite.** Inherit from `Sprite` and add your own logic, like `Player` does:
+
+```csharp
+public class Crate : Sprite
+{
+    public CollisionRect Rect { get; }
+
+    public Crate(Vector2 pos) : base("crate", pos)
+    {
+        Rect = new CollisionRect((int)pos.X, (int)pos.Y, 16, 16) { IsStatic = true };
+    }
+}
+```
 
 ---
 
@@ -357,6 +545,36 @@ A horizontal strip of equally sized frames in one texture.
 | `DrawFrame(int index, Vector2 position, float scale)` | …with a scale |
 | `DrawFrame(int index, Vector2 position, float scale, Color color)` | …with a scale and tint |
 | `DrawFrame(int index, Vector2 position, float rotation, float scale, SpriteEffects effects = None)` | …with full control |
+
+Use a `SpriteSheet` when you pick the frame yourself; use [SpriteAnimation](#-spriteanimation) when frames should play on a timer. `position` is the **center** of the frame. `Draw()` always draws at `(0, 0)` unless you inherit and set `Position`, so use `DrawFrame` for normal use.
+
+#### Scenarios
+
+**A pixel-art health bar of hearts.** With a `hearts.png` strip of 3 frames (full, half, empty), drawn on the game layer without the camera so it stays sharp and fixed on screen:
+
+```csharp
+hearts = new SpriteSheet("hearts", 3);
+
+// Draw: after the world and lighting, before canvas.BeginUI
+_spriteBatch.Begin(samplerState: SamplerState.PointClamp);   // no camera transform
+for (int i = 0; i < maxHealth / 2; i++)
+{
+    int left = health - i * 2;                     // health inside this heart: 2, 1 or 0
+    int frame = left >= 2 ? 0 : left == 1 ? 1 : 2;
+    hearts.DrawFrame(frame, new Vector2(12 + i * (hearts.FrameWidth + 2), 12));
+}
+_spriteBatch.End();
+```
+
+**Random variations** (rocks, grass, cracks). Choose a frame once when the object is created and keep it:
+
+```csharp
+variant = random.Next(4);
+// Draw
+rocks.DrawFrame(variant, position);
+```
+
+**Item icons in an inventory**, one frame per item ID: `items.DrawFrame(slot.ItemId, slotCenter, 2f);`
 
 ---
 
@@ -398,6 +616,71 @@ walk.Position = new Vector2(100, 100);
 // Draw:   walk.Draw();
 ```
 
+#### Scenarios
+
+**Switching between idle and walk, facing left or right.** Keep one animation per state and swap which one is current:
+
+```csharp
+idle = new SpriteAnimation("hero_idle", 4, 6);
+walk = new SpriteAnimation("hero_walk", 6, 12);
+current = idle;
+
+// Update
+SpriteAnimation next = dir != Vector2.Zero ? walk : idle;
+if (next != current)
+{
+    next.Reset();                 // start the new animation from its first frame
+    current = next;
+}
+if (dir.X != 0) facingLeft = dir.X < 0;
+
+current.Position = pos;
+current.SpriteEffect = facingLeft ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+current.Update(gameTime);
+
+// Draw
+current.Draw();
+```
+
+**A one-shot explosion that removes itself.** `UpdateOnce` stops on the last frame and sets `IsFinished`:
+
+```csharp
+explosions.Add(new SpriteAnimation("explosion", 8, 16) { Position = enemy.Pos });
+
+// Update
+foreach (SpriteAnimation boom in explosions)
+    boom.UpdateOnce(gameTime);
+explosions.RemoveAll(boom => boom.IsFinished);
+```
+
+**A door that opens and closes.** Play once forwards to open, once backwards to close:
+
+```csharp
+// open
+door.IsReversed = false;
+door.IsFinished = false;
+
+// close
+door.IsReversed = true;
+door.IsFinished = false;
+
+// Update
+door.UpdateOnce(gameTime);
+bool blocksPlayer = door.FrameIndex == 0;   // only solid when fully closed
+```
+
+**Dealing damage on a specific frame** (the frame where the sword is extended):
+
+```csharp
+swing.UpdateOnce(gameTime);
+if (swing.FrameIndex == 2 && !hitApplied)
+{
+    hitApplied = true;
+    foreach (Enemy e in enemies)
+        if (swordBox.Intersects(e.Rect)) e.Hurt(1);
+}
+```
+
 ---
 
 ## 🧱 TileMap
@@ -424,6 +707,39 @@ The CSV is looked up in the working directory and in `Content/`. Mark it as *Cop
 ```csharp
 tilemap = new TileMap("tilemap", 16, 16, "tilemap.csv");
 tilemap.RegisterAnimation(20, new[] { 20, 21, 22, 23 }, 0.15f); // animated water
+```
+
+#### Scenarios
+
+**Layers: ground, decorations, and things drawn over the player** (roofs, treetops). Export each layer to its own CSV, all using the same tileset; empty cells are `-1`:
+
+```csharp
+ground = new TileMap("tilemap", 16, 16, "ground.csv");
+decor  = new TileMap("tilemap", 16, 16, "decor.csv");
+above  = new TileMap("tilemap", 16, 16, "above.csv");
+
+// Draw
+ground.Draw(camera.VisibleArea);
+decor.Draw(camera.VisibleArea);
+player.Draw(Color.White);
+above.Draw(camera.VisibleArea);    // the player walks "under" these
+```
+
+**Loading the next level:**
+
+```csharp
+void LoadLevel(int number)
+{
+    tilemap = new TileMap("tilemap", 16, 16, $"level{number}.csv");
+    collisionMap = new CollisionMap("tilemap", 16, 16, $"level{number}_collision.csv");
+    camera.SetBounds(tilemap.PixelBounds);
+}
+```
+
+**Animated water, lava, torches on walls.** Paint the first frame's ID in the CSV and register the rest. Every cell using that ID animates in sync:
+
+```csharp
+tilemap.RegisterAnimation(28, new[] { 28, 29, 30, 31 }, 0.2f);   // lava
 ```
 
 ---
@@ -482,6 +798,65 @@ bool onIce = collisionMap.GetKindAt(player.Rect.Center) == Ice;
 | surface type: the same everywhere | wall, ice, mud | `CollisionMap`, one number per kind (merged per kind) |
 | thing with its own behavior or state | breakable block, door, retracting spikes | an [ObjectMap](#-objectmap) object with its own collider (never merged) |
 
+#### Scenarios
+
+**Top-down game: walls push the player out.** Use the merged rectangles as [ICollider](#icollider)s:
+
+```csharp
+walls = collisionMap.GetCollisionRects(Wall).ToArray();
+
+// Update
+foreach (ICollider wall in walls)
+    wall.ResolveAgainst(player.Rect);
+```
+
+**Platformer: gravity, landing and hitting your head.** Move and resolve one axis at a time. Keep the real position as a float so slow movement isn't lost to rounding:
+
+```csharp
+// Update
+float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+velocity.Y += 900f * dt;                                   // gravity
+
+// X
+pos.X += velocity.X * dt;
+var box = new Rectangle((int)MathF.Round(pos.X), (int)MathF.Round(pos.Y), 12, 16);  // top-left + size
+int wantedX = box.X;
+collisionMap.ResolveCollisionHorizontal(ref box, velocity.X, Wall);
+if (box.X != wantedX) { pos.X = box.X; velocity.X = 0; }   // hit a wall
+
+// Y
+pos.Y += velocity.Y * dt;
+box.Y = (int)MathF.Round(pos.Y);
+int wantedY = box.Y;
+collisionMap.ResolveCollisionVertical(ref box, velocity.Y, Wall);
+if (box.Y != wantedY) { pos.Y = box.Y; velocity.Y = 0; }   // landed, or bumped the ceiling
+
+// On the ground if a 1-pixel strip under the feet touches a wall
+onGround = collisionMap.CheckCollision(new Rectangle(box.X, box.Bottom, box.Width, 1), Wall);
+if (onGround && Globals.Input.JustPressed("Jump"))
+    velocity.Y = -300f;
+```
+
+**Ice and mud change how the player moves.** Leave them out of the walls so the player walks over them, and read the kind under the feet:
+
+```csharp
+const int Wall = 0, Ice = 1, Mud = 2;
+
+// Update
+int ground = collisionMap.GetKindAt(player.Rect.Center);
+float grip     = ground == Ice ? 0.03f : 0.25f;   // how fast the velocity follows the input
+float maxSpeed = ground == Mud ? 60f   : 150f;
+velocity = Vector2.Lerp(velocity, inputDir * maxSpeed, grip);
+```
+
+**Spikes and pits that reset the player:**
+
+```csharp
+const int Spikes = 3;
+if (collisionMap.CheckCollision(player.Rect, Spikes))
+    Respawn();
+```
+
 ---
 
 ## 📍 ObjectMap
@@ -511,6 +886,38 @@ List<Coin> coins = placements.Spawn(2, position => new Coin(position));
 ```
 
 `Tree` and `Coin` in this repo are example objects: a tree with a trunk wall and a canopy that fades while the player is behind it, and a spinning coin using `SpriteAnimation`.
+
+#### Scenarios
+
+**The player's start point.** Paint a single cell with its own number and read its position:
+
+```csharp
+Vector2 spawn = placements.GetPositions(9)[0];   // 9 = player start
+player = new Player("player", spawn);
+```
+
+**Objects that block the player and the light.** Collect their colliders after spawning:
+
+```csharp
+var wallList = new List<ICollider>(collisionMap.GetCollisionRects(Wall));
+foreach (Tree tree in trees)
+    wallList.Add(tree.Wall);
+walls = wallList.ToArray();
+lighting.AddOccluders(walls);
+```
+
+**Collecting coins.** Give your object a collider and remove it on touch (here `Coin` is assumed to have a `Hitbox`):
+
+```csharp
+score += coins.RemoveAll(coin => player.Rect.Intersects(coin.Hitbox));
+```
+
+**Enemies with their own behavior.** Anything with a constructor that takes a position works:
+
+```csharp
+List<Slime> slimes = placements.Spawn(3, position => new Slime(position, speed: 40f));
+List<Lamp>  lamps  = placements.Spawn(4, position => new Lamp(position, lighting));   // adds its own PointLight
+```
 
 ---
 
@@ -570,6 +977,48 @@ Creates a rectangle **centered** at the given position.
 | `ResolveAgainst(ICollider moving)` | See [ICollider](#icollider) |
 | `Draw(Color color)` | Debug draw |
 
+#### Scenarios
+
+**A hitbox at the feet that walls push out.** This is how `Player` works: move the sprite, move the rectangle to match, let walls push the rectangle, then put the sprite back on top of it:
+
+```csharp
+rect = new CollisionRect(0, 0, 80, 30);
+rect.SetOffsetExtra(0, 25);             // 25px below the sprite's center: around the feet
+
+// Update
+pos += dir * speed * dt;
+rect.UpdateRect((int)MathF.Round(pos.X), (int)MathF.Round(pos.Y));
+foreach (ICollider wall in walls)
+    wall.ResolveAgainst(rect);          // pushes rect out of static colliders
+pos = rect.Center - new Vector2(0, 25); // follow wherever the rect ended up
+```
+
+**A trigger zone** (level exit, checkpoint, cutscene start). Leave `IsStatic` off so it never pushes; check when the player enters:
+
+```csharp
+checkpoint = new CollisionRect(600, 40, 32, 16);
+
+// Update
+bool inside = player.Rect.Intersects(checkpoint);
+if (inside && !wasInside)               // only the frame the player steps in
+    SaveGame();
+wasInside = inside;
+```
+
+**A sword hitbox in front of the player:**
+
+```csharp
+swordBox = new CollisionRect(0, 0, 20, 12);
+
+// Update, while attacking
+int side = facingLeft ? -20 : 20;
+swordBox.UpdateRect((int)player.Pos.X + side, (int)player.Pos.Y);
+foreach (Enemy enemy in enemies)
+    if (swordBox.Intersects(enemy.Rect)) enemy.Hurt(1);
+```
+
+**Debug view.** Draw colliders half-transparent on top of the world while tuning sizes: `player.Rect.Draw(new Color(255, 0, 0, 128));`
+
 ---
 
 ## ⚪ CollisionCircle
@@ -603,6 +1052,37 @@ A circular collider.
 | `ResolveAgainst(ICollider moving)` | See [ICollider](#icollider) |
 | `Draw(Color color)` | Debug draw (outline made of line segments) |
 
+#### Scenarios
+
+**Round obstacles** (pillars, boulders, barrels). Rectangles slide off them smoothly instead of catching on corners:
+
+```csharp
+var pillar = new CollisionCircle(300, 200, 12) { IsStatic = true };
+wallList.Add(pillar);
+```
+
+**An enemy's sight or attack range:**
+
+```csharp
+sight = new CollisionCircle((int)Pos.X, (int)Pos.Y, 80);
+
+// Update
+sight.UpdateCenter((int)Pos.X, (int)Pos.Y);
+if (sight.Intersects(player.Rect))
+    Chase(player);
+```
+
+Combine it with [Lighting](#-lighting--pointlight) for stealth: `if (sight.Intersects(player.Rect) && !hiddenInShadow) Chase(player);`
+
+**A pickup magnet.** A large circle around the player pulls in nearby coins:
+
+```csharp
+magnet.UpdateCenter((int)player.Pos.X, (int)player.Pos.Y);
+foreach (Coin coin in coins)
+    if (magnet.Contains(coin.Position.ToPoint()))
+        coin.Position = Vector2.Lerp(coin.Position, player.Pos, 0.1f);
+```
+
 ---
 
 ## 🎮 InputManager
@@ -631,6 +1111,72 @@ Globals.Input.Register("Jump", Keys.Space, Buttons.A);
 
 if (Globals.Input.JustPressed("Jump"))
     player.Jump();
+```
+
+#### Scenarios
+
+**8-direction movement with keyboard, D-pad or stick:**
+
+```csharp
+Vector2 dir = Vector2.Zero;
+if (Globals.Input.IsPressed("MoveLeft"))  dir.X -= 1;
+if (Globals.Input.IsPressed("MoveRight")) dir.X += 1;
+if (Globals.Input.IsPressed("MoveUp"))    dir.Y -= 1;
+if (Globals.Input.IsPressed("MoveDown"))  dir.Y += 1;
+
+// No keys held: use the stick. Its Y points up, the world's points down, so flip it.
+if (dir == Vector2.Zero)
+    dir = new Vector2(Globals.Input.LeftStick.X, -Globals.Input.LeftStick.Y);
+
+if (dir.Length() > 1) dir.Normalize();   // diagonals aren't faster
+```
+
+**Variable jump height:** tap for a short hop, hold for a full jump.
+
+```csharp
+if (Globals.Input.JustPressed("Jump") && onGround)
+    velocity.Y = -300f;
+if (Globals.Input.JustReleased("Jump") && velocity.Y < 0)
+    velocity.Y *= 0.5f;                 // let go early: cut the jump short
+```
+
+**A charged attack:**
+
+```csharp
+if (Globals.Input.IsPressed("Attack"))
+    charge = MathF.Min(charge + dt, 1.5f);
+if (Globals.Input.JustReleased("Attack"))
+{
+    FireShot(power: charge);
+    charge = 0;
+}
+```
+
+**Rebinding a key from an options menu.** Wait for a key that was *just* pressed, so the key that opened the prompt (like Enter) isn't picked up:
+
+```csharp
+if (waitingForJumpKey)
+{
+    foreach (Keys key in Keyboard.GetState().GetPressedKeys())
+    {
+        if (Globals.Input.KeyJustDown(key))
+        {
+            Globals.Input.RebindKey("Jump", key);
+            waitingForJumpKey = false;
+            break;
+        }
+    }
+}
+```
+
+**Two local players.** Give player 2 their own manager, gamepad and keys:
+
+```csharp
+player2Input = new InputManager(PlayerIndex.Two);
+player2Input.Register("Jump", Keys.Up, Buttons.A);
+
+// Update
+player2Input.Update();
 ```
 
 ---
@@ -712,6 +1258,60 @@ orbit.IsLooping = true;
 
 This stays within 0.03% of a true circle. Pauses (`delay`) only happen at a curve's `end`, never partway along it.
 
+#### Scenarios
+
+**A moving platform that carries the player.** Measure how far the path moved this frame and move the rider by the same amount:
+
+```csharp
+Vector2 before = lift.Position;
+lift.Update(gameTime);
+Vector2 moved = lift.Position - before;
+
+liftRect.UpdateRect((int)lift.Position.X, (int)lift.Position.Y);
+if (player.Rect.Intersects(liftRect))   // the player's feet are on the platform
+    player.Pos += moved;
+```
+
+**An elevator that only moves when called.** Keep it paused, start it from a button, and send it back the other way next time:
+
+```csharp
+elevator = new Path2D(new List<Vector2> { bottom, top }, speed: 60f) { IsActive = false };
+
+// when the button is pressed
+if (elevator.IsFinished)
+    elevator.ReverseDirection();        // at one end: head to the other
+elevator.IsActive = true;
+```
+
+**A guard patrol that stops to look around**, facing the way it walks:
+
+```csharp
+patrol = new Path2D { Speed = 40f, IsLooping = true };
+patrol.AddWaypoint(new Vector2(100, 200), delay: 2f);
+patrol.AddWaypoint(new Vector2(300, 200), delay: 2f);
+patrol.AddWaypoint(new Vector2(300, 320), delay: 1f);
+
+// Update
+Vector2 before = patrol.Position;
+patrol.Update(gameTime);
+if (patrol.Position.X != before.X)
+    facingLeft = patrol.Position.X < before.X;
+guard.Pos = patrol.Position;
+```
+
+**A thrown grenade's arc.** One curve whose control point is above the middle of the throw:
+
+```csharp
+var arc = new Path2D { Speed = 250f };
+arc.AddWaypoint(hand);
+arc.AddCurve((hand + target) / 2f - new Vector2(0, 60), target);
+
+// Update
+arc.Update(gameTime);
+grenade.Pos = arc.Position;
+if (arc.IsFinished) Explode(target);
+```
+
 ---
 
 ## TextBox
@@ -727,6 +1327,28 @@ Draws a line of text **centered** on a point.
 | `rotation` | Rotation in radians |
 | `scale` | Scale (prefer a bigger font size over scaling up — see [Canvas](#-canvas)) |
 | `Draw(int x, int y, Color color)` | Draws the text centered at `(x, y)` |
+
+#### Scenarios
+
+**A score at the top of the screen**, on the UI layer:
+
+```csharp
+scoreText = new TextBox(font);
+
+// Update
+scoreText.Text = $"Score: {score}";
+
+// Draw, between canvas.BeginUI and canvas.EndUI
+scoreText.Draw(960, 60, Color.White);    // centered horizontally in 1920×1080
+```
+
+**A pulsing "PAUSED" title:**
+
+```csharp
+pausedText.Text = "PAUSED";
+pausedText.scale = 1f + 0.05f * MathF.Sin((float)gameTime.TotalGameTime.TotalSeconds * 4f);
+pausedText.Draw(960, 540, PicoPallete.yellow);
+```
 
 ---
 
@@ -759,6 +1381,45 @@ A clickable text field: click it to focus, type, press Enter to submit. Uses Mon
 nameInput = new TextInput(this, font, new CollisionRect(960, 540, 600, 60), "Your name");
 nameInput.ScreenToLocal = canvas.ScreenToUI;
 nameInput.Submitted += name => playerName = name;
+```
+
+#### Scenarios
+
+**A name entry screen, start to finish:**
+
+```csharp
+// LoadContent
+nameInput = new TextInput(this, font, new CollisionRect(960, 540, 600, 60), "Your name");
+nameInput.ScreenToLocal = canvas.ScreenToUI;   // it's drawn on the UI layer
+nameInput.MaxLength = 12;
+nameInput.Submitted += name => { playerName = name; StartGame(); };
+nameInput.Focus();                             // ready to type right away
+
+// Update
+nameInput.Update(gameTime);
+
+// Draw, between canvas.BeginUI and canvas.EndUI
+nameInput.Draw();
+
+// leaving the screen
+nameInput.Dispose();
+```
+
+**Don't move the player while typing.** WASD would otherwise do both:
+
+```csharp
+if (!chatInput.IsFocused)
+    player.Update(gameTime, walls);
+```
+
+**A chat box or debug console** that clears after each line:
+
+```csharp
+console.Submitted += line =>
+{
+    RunCommand(line);
+    console.Text = "";
+};
 ```
 
 ---
