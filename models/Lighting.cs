@@ -206,7 +206,119 @@ namespace NodeTesting.models
             spriteBatch.End();
         }
 
+        /// <summary>
+        /// How much light reaches one spot: the ambient color plus every light that can see it
+        /// without an occluder in the way. Use it to light standing sprites (characters, trees)
+        /// evenly from their feet instead of with the light map: draw them after <see cref="Draw"/>
+        /// with this as their color.
+        /// </summary>
+        /// <remarks>
+        /// Occluders the point is inside or touching are ignored, so a tree measured at the base of
+        /// its own trunk isn't blocked by that trunk. Returns <see cref="Color.White"/> while
+        /// lighting is turned off.
+        /// </remarks>
+        /// <param name="worldPosition">The spot to measure, in world pixels (usually the feet).</param>
+        public Color GetLightAt(Vector2 worldPosition) =>
+            Enabled ? ComputeLightAt(worldPosition, Ambient, Lights, Occluders) : Color.White;
+
+        /// <summary>The calculation behind <see cref="GetLightAt"/>, without needing a graphics device.</summary>
+        internal static Color ComputeLightAt(Vector2 worldPosition, Color ambient,
+                                             List<PointLight> lights, List<ICollider> occluders)
+        {
+            Vector3 total = ambient.ToVector3();
+
+            foreach (PointLight light in lights)
+            {
+                if (!IsVisible(light))
+                    continue;
+
+                float distance = Vector2.Distance(light.Position, worldPosition);
+                if (distance >= light.Radius)
+                    continue;
+
+                if (light.CastsShadows && IsBlocked(light.Position, worldPosition, occluders))
+                    continue;
+
+                // Same falloff as the glow texture: squared, full at the center, zero at the radius
+                float falloff = 1f - distance / light.Radius;
+                falloff *= falloff;
+
+                total += light.Color.ToVector3() * MathHelper.Clamp(light.Intensity, 0f, 1f) * falloff;
+            }
+
+            return new Color(Vector3.Clamp(total, Vector3.Zero, Vector3.One));
+        }
+
         // ── Private helpers ────────────────────────────────────────────────────
+
+        /// <summary>Whether any occluder lies on the straight line from the light to the point.</summary>
+        private static bool IsBlocked(Vector2 from, Vector2 to, List<ICollider> occluders)
+        {
+            foreach (ICollider occluder in occluders)
+            {
+                switch (occluder)
+                {
+                    case CollisionRect r:
+                        Rectangle rect = r.Rect;
+                        // Ignore the occluder the point stands on or in (e.g. its own trunk)
+                        if (to.X >= rect.Left - 1 && to.X <= rect.Right + 1 &&
+                            to.Y >= rect.Top - 1 && to.Y <= rect.Bottom + 1)
+                            continue;
+                        if (SegmentHitsRect(from, to, rect))
+                            return true;
+                        break;
+
+                    case CollisionCircle c:
+                        if (Vector2.Distance(to, c.Center) <= c.Radius + 1)
+                            continue;
+                        if (DistanceToSegment(c.Center, from, to) < c.Radius)
+                            return true;
+                        break;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Whether the line from a to b passes through the rectangle (clipping test).</summary>
+        private static bool SegmentHitsRect(Vector2 a, Vector2 b, Rectangle rect)
+        {
+            Vector2 d = b - a;
+            float tMin = 0f, tMax = 1f;
+
+            // Clip the line against each pair of sides; if nothing is left, it misses
+            if (!Clip(-d.X, a.X - rect.Left, ref tMin, ref tMax)) return false;
+            if (!Clip(d.X, rect.Right - a.X, ref tMin, ref tMax)) return false;
+            if (!Clip(-d.Y, a.Y - rect.Top, ref tMin, ref tMax)) return false;
+            if (!Clip(d.Y, rect.Bottom - a.Y, ref tMin, ref tMax)) return false;
+            return tMin < tMax;
+        }
+
+        private static bool Clip(float p, float q, ref float tMin, ref float tMax)
+        {
+            if (MathF.Abs(p) < 1e-6f)
+                return q >= 0f;   // parallel to this side: inside or outside entirely
+
+            float t = q / p;
+            if (p < 0f)
+            {
+                if (t > tMax) return false;
+                if (t > tMin) tMin = t;
+            }
+            else
+            {
+                if (t < tMin) return false;
+                if (t < tMax) tMax = t;
+            }
+            return true;
+        }
+
+        private static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float lengthSquared = ab.LengthSquared();
+            float t = lengthSquared > 0f ? MathHelper.Clamp(Vector2.Dot(point - a, ab) / lengthSquared, 0f, 1f) : 0f;
+            return Vector2.Distance(point, a + ab * t);
+        }
 
         private static bool IsVisible(PointLight light) =>
             light.Enabled && light.Radius > 0f && light.Intensity > 0f;

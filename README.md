@@ -84,6 +84,7 @@ protected override void Draw(GameTime gameTime)
     player.Draw(Color.White);
     _spriteBatch.End();
     lighting.Draw(_spriteBatch, camera.Transform()); // darken the world, apply lights
+    // (characters and other standing sprites go after this: see Lighting → Flat things vs standing things)
 
     // 2. UI layer: 1920x1080 coordinates, stays crisp at any window size
     canvas.BeginUI(_spriteBatch);
@@ -253,6 +254,7 @@ How it works: each frame a light map the size of the canvas is filled with the `
 | `Occluders` | Everything that blocks light (`CollisionRect`s and `CollisionCircle`s). Read every frame, so moving one moves its shadow. |
 | `AddOccluder(ICollider)` / `AddOccluders(IEnumerable<ICollider>)` | Makes colliders block light, e.g. `AddOccluders(walls)` or `AddOccluders(collisionMap.GetCollisionRects())` |
 | `RemoveOccluder(ICollider)` | Stops a collider blocking light |
+| `GetLightAt(Vector2 worldPosition)` | The light reaching one spot (ambient + every light that can see it past the occluders). Use it to tint standing sprites by their feet. Returns white while lighting is off. |
 | `Draw(SpriteBatch, Matrix cameraTransform)` | Builds the light map and applies it. Call after the world's `SpriteBatch.End()` and before `canvas.BeginUI(...)`, with the same camera matrix the world used. |
 
 #### PointLight
@@ -292,6 +294,35 @@ lighting.AddOccluders(walls);   // the same colliders the player bumps into
 ```
 
 Each edge of an occluder that faces away from a light is stretched away from it into a long dark band; together they form the shadow. Occluders themselves are never darkened, not even by each other's shadows, so walls stay lit and darkness only falls on open ground behind them. A light at the outer corner of an L-shaped wall lights both arms and leaves one dark wedge behind the corner.
+
+#### Flat things vs standing things
+
+The light map is a flat picture: it lights each pixel on its own, with no idea what's in front of what. That's right for the floor and wall tops, but wrong for a character standing in front of a wall. Their head overlaps the wall on screen, so it gets the wall's light while their body gets the floor's shadow.
+
+So split drawing in two:
+
+| Group | Examples | Lit by |
+|---|---|---|
+| **Flat** | floor tiles, wall tops, items lying on the ground | the light map: draw before `lighting.Draw` |
+| **Standing** | player, NPCs, enemies, trees | one light level at their feet: draw after `lighting.Draw`, tinted with `GetLightAt(feet)` |
+
+```csharp
+// 1. Flat things
+canvas.Activate();
+_spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
+tilemap.Draw(camera.VisibleArea);
+_spriteBatch.End();
+
+// 2. Lighting
+lighting.Draw(_spriteBatch, camera.Transform());
+
+// 3. Standing things, each lit at its feet
+_spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
+player.Draw(lighting.GetLightAt(player.Rect.Center));
+_spriteBatch.End();
+```
+
+A character whose feet are in shadow is dark from head to toe; step into the light and the whole sprite lights up.
 
 Lights with no occluder within their radius cost the same as before. Each light that *does* have one in range needs an extra pass, so prefer `CastsShadows = false` on lots of small lights.
 

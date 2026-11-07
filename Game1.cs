@@ -203,7 +203,8 @@ namespace NodeTesting
 
         protected override void Draw(GameTime gameTime)
         {
-            // ── Pass 1: draw everything cleanly onto the canvas ───────────────────
+            // ── Pass 1: flat things (floor, wall tops, debug shapes) ─────────────
+            // These are lit pixel by pixel by the light map.
             canvas.Activate();
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
 
@@ -211,19 +212,6 @@ namespace NodeTesting
             collisionMap.DrawCollisionRects(Ice, new Color(140, 210, 255));   // ice floor
             foreach (Coin coin in coins)
                 coin.Draw();
-
-            // Trees further up the screen than the player's feet are behind the player:
-            // draw them first. The rest are in front: draw them after the player.
-            float playerFeetY = player.Rect.Rect.Bottom;
-            foreach (Tree tree in trees)
-                if (tree.BaseY <= playerFeetY) tree.Draw();
-
-            // Tint the player light blue while standing on ice
-            bool onIce = collisionMap.GetKindAt(player.Rect.Center) == Ice;
-            player.Draw(onIce ? Color.LightBlue : Color.White);
-
-            foreach (Tree tree in trees)
-                if (tree.BaseY > playerFeetY) tree.Draw();
 
             player.Rect.Draw(new Color(255, 0, 0, 128));
             stepHere.Draw(new Color(0, 0, 255, 128));
@@ -238,8 +226,6 @@ namespace NodeTesting
             List<CollisionRect> wallRects = collisionMap.GetCollisionRects(Wall);
             for (int i = 0; i < wallRects.Count; i++)
                 wallRects[i].Draw(mergeColors[i % mergeColors.Length]);
-
-            platform.Draw();
 
             _spriteBatch.Draw(Globals.Pixel, new Rectangle((int)fewPoints.Position.X - 5, (int)fewPoints.Position.Y - 5, 10, 10), Color.Red);
             _spriteBatch.Draw(Globals.Pixel, new Rectangle((int)manyPoints.Position.X - 5, (int)manyPoints.Position.Y - 5, 10, 10), Color.Yellow);
@@ -278,6 +264,31 @@ namespace NodeTesting
 
             // Darken the world and apply the lights (game layer only, not the UI)
             lighting.Draw(_spriteBatch, camera.Transform());
+
+            // ── Pass 2: standing things (characters, trees) ──────────────────────
+            // Drawn after the lighting, each tinted by the light at its feet,
+            // so the whole sprite is lit or dark together.
+            _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
+
+            // Trees further up the screen than the player's feet are behind the player:
+            // draw them first. The rest are in front: draw them after the player.
+            float playerFeetY = player.Rect.Rect.Bottom;
+            foreach (Tree tree in trees)
+                if (tree.BaseY <= playerFeetY) tree.Draw(lighting.GetLightAt(tree.BasePosition));
+
+            // Light at the player's feet, tinted light blue while standing on ice
+            Color playerLight = lighting.GetLightAt(player.Rect.Center);
+            bool onIce = collisionMap.GetKindAt(player.Rect.Center) == Ice;
+            if (onIce)
+                playerLight = new Color(playerLight.ToVector3() * Color.LightBlue.ToVector3());
+            player.Draw(playerLight);
+
+            foreach (Tree tree in trees)
+                if (tree.BaseY > playerFeetY) tree.Draw(lighting.GetLightAt(tree.BasePosition));
+
+            platform.Draw(lighting.GetLightAt(platform.Feet));
+
+            _spriteBatch.End();
 
             // 2. UI layer: 1920x1080 coordinates, stays crisp at any window size
             canvas.BeginUI(_spriteBatch);

@@ -28,12 +28,16 @@ namespace NodeTesting
         /// <summary>Where the tree touches the ground (bottom of the image), in world Y.</summary>
         public float BaseY { get; }
 
+        /// <summary>Bottom-center of the tree, where its trunk meets the ground.</summary>
+        public Vector2 BasePosition { get; }
+
         /// <param name="basePosition">Bottom-center of the tree: where its trunk meets the ground.</param>
         public Tree(Vector2 basePosition)
         {
             int x = (int)basePosition.X;
             int y = (int)basePosition.Y;
             BaseY = y;
+            BasePosition = basePosition;
 
             // Draw the image so its bottom-middle sits on basePosition
             sprite = new Sprite("tree", basePosition);
@@ -58,9 +62,12 @@ namespace NodeTesting
             opacity = MathHelper.Lerp(opacity, target, 0.2f);
         }
 
-        public void Draw()
+        public void Draw() => Draw(Color.White);
+
+        /// <param name="light">Tint, e.g. <c>lighting.GetLightAt(tree.BasePosition)</c>.</param>
+        public void Draw(Color light)
         {
-            sprite.Draw(Color.White * opacity);
+            sprite.Draw(light * opacity);
         }
     }
 }

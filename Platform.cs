@@ -31,9 +31,15 @@ namespace NodeTesting
             platform.Pos = path2d.Position; // sprite follows the path
         }
 
-        public void Draw()
+        /// <summary>Where the sprite stands (bottom of the 96px image, a little above the edge).</summary>
+        public Vector2 Feet => platform.Pos + new Vector2(0, 40);
+
+        public void Draw() => Draw(Color.White);
+
+        /// <param name="light">Tint, e.g. <c>lighting.GetLightAt(platform.Feet)</c>.</param>
+        public void Draw(Color light)
         {
-            platform.Draw(Color.White);
+            platform.Draw(light);
         }
     }
 }
