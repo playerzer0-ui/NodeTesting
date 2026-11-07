@@ -13,6 +13,7 @@ All models live in the `NodeTesting.models` namespace.
 - Rendering
   - [Canvas](#-canvas)
   - [Camera & CameraFocus](#-camera--camerafocus)
+  - [Lighting & PointLight](#-lighting--pointlight)
 - Sprites
   - [Sprite](#sprite)
   - [SpriteSheet](#spritesheet)
@@ -82,6 +83,7 @@ protected override void Draw(GameTime gameTime)
     tilemap.Draw(camera.VisibleArea); // only the tiles on screen
     player.Draw(Color.White);
     _spriteBatch.End();
+    lighting.Draw(_spriteBatch, camera.Transform()); // darken the world, apply lights
 
     // 2. UI layer: 1920x1080 coordinates, stays crisp at any window size
     canvas.BeginUI(_spriteBatch);
@@ -231,6 +233,70 @@ How it works, for a 1280×720 canvas at zoom `1`: the camera sees 640 pixels eit
 
 ---
 
+## 💡 Lighting & PointLight
+
+Darkens the [Canvas](#-canvas) game layer and lets lights bring back the area around them, like a dark room lit by torches. Occluders (walls, trunks...) block light and cast shadows. The UI layer is never affected.
+
+How it works: each frame a light map the size of the canvas is filled with the `Ambient` color, every light adds a soft glow onto it, and the game layer is multiplied by it. Where the light map is black the world is black; where it's white the world shows its true colors.
+
+#### Lighting
+
+**public Lighting(Canvas canvas, GraphicsDevice graphicsDevice)**
+
+| Member | Description |
+|---|---|
+| `Ambient` | Light level where no light reaches. `Color.Black` = pitch dark, `Color.White` = no darkness. `(25, 25, 45)` reads as night. |
+| `Enabled` | `false` turns lighting off |
+| `Lights` | All lights |
+| `Add(PointLight light)` | Adds a light and returns it |
+| `Remove(PointLight light)` | Removes a light |
+| `Occluders` | Everything that blocks light (`CollisionRect`s and `CollisionCircle`s). Read every frame, so moving one moves its shadow. |
+| `AddOccluder(ICollider)` / `AddOccluders(IEnumerable<ICollider>)` | Makes colliders block light, e.g. `AddOccluders(walls)` or `AddOccluders(collisionMap.GetCollisionRects())` |
+| `RemoveOccluder(ICollider)` | Stops a collider blocking light |
+| `Draw(SpriteBatch, Matrix cameraTransform)` | Builds the light map and applies it. Call after the world's `SpriteBatch.End()` and before `canvas.BeginUI(...)`, with the same camera matrix the world used. |
+
+#### PointLight
+
+A round glow, brightest at its center, fading to nothing at its radius.
+
+**public PointLight(Vector2 position, float radius, Color? color = null, float intensity = 1f)**
+
+| Field | Description |
+|---|---|
+| `Position` | Center, in world pixels. Update it each frame to make a light follow something. |
+| `Radius` | How far it reaches, in world pixels |
+| `Color` | White shows true colors; warm or cool colors tint what they light |
+| `Intensity` | Brightness, `0`–`1` |
+| `Enabled` | `false` switches it off without removing it |
+| `CastsShadows` | `false` lets this light ignore occluders. Use it for small glows (coins, sparks); it's also cheaper. |
+
+```csharp
+lighting = new Lighting(canvas, GraphicsDevice) { Ambient = new Color(25, 25, 45) };
+
+PointLight playerLight = lighting.Add(new PointLight(player.Pos, 180, new Color(255, 230, 190)));
+lighting.Add(new PointLight(new Vector2(390, 130), 110, Color.Orange));   // a lamp
+
+// Update: playerLight.Position = player.Pos;
+// Draw:   after the world's _spriteBatch.End():
+lighting.Draw(_spriteBatch, camera.Transform());
+```
+
+Lights where the [ObjectMap](#-objectmap) places things are easy: `foreach (var p in placements.GetPositions(2)) lighting.Add(new PointLight(p, 28, Color.Gold));`
+
+> Lights can only reveal the art, never make it brighter than it really is. Overlapping lights add together up to full brightness.
+
+#### Shadows
+
+```csharp
+lighting.AddOccluders(walls);   // the same colliders the player bumps into
+```
+
+Each edge of an occluder that faces away from a light is stretched away from it into a long dark band; together they form the shadow. Occluders themselves are never darkened, not even by each other's shadows, so walls stay lit and darkness only falls on open ground behind them. A light at the outer corner of an L-shaped wall lights both arms and leaves one dark wedge behind the corner.
+
+Lights with no occluder within their radius cost the same as before. Each light that *does* have one in range needs an extra pass, so prefer `CastsShadows = false` on lots of small lights.
+
+---
+
 ## Sprite
 
 A single texture drawn at a position.
@@ -333,22 +399,57 @@ tilemap.RegisterAnimation(20, new[] { 20, 21, 22, 23 }, 0.15f); // animated wate
 
 ## 🧱 CollisionMap
 
-A map used for collision instead of visuals. In its CSV, **`0` means solid**. Each solid tile becomes a static `CollisionRect`.
+A map used for collision instead of visuals. In its CSV, **every number `0` or above is solid**, and the number is the tile's **kind** (e.g. `0` = wall, `1` = ice, `2` = mud). Negative numbers (e.g. `-1`) are empty.
+
+When the map loads, touching tiles **of the same kind** are merged into as few rectangles as possible: a 40-tile wall becomes one `CollisionRect`, not 40. Tiles of different kinds never merge with each other. Paint individual tiles in Tiled as usual; the merging is automatic.
+
+```
+Painted:              Merged:
+0 0 0 0 . .           ┌───────┐
+0 0 0 0 . .           │  4×2  │ . .
+. . 0 0 0 0           └─┬─────┴─┐
+                        │  4×1  │      10 tiles → 2 rectangles
+```
+
+Fewer rectangles makes everything that loops over them faster (collision checks, player collision, light shadows), and a player sliding along a long wall can't catch on the seams between tiles.
 
 **public CollisionMap(string texturePath, int tileWidth, int tileHeight, string csvPath)**
 
 | Method | Description |
 |---|---|
-| `CheckCollision(CollisionRect collider)` | `true` if the collider touches a solid tile |
-| `CheckCollision(Rectangle rectangle)` | Same, for a plain `Rectangle` |
-| `GetCollisionRects()` | All solid tiles as `CollisionRect`s |
-| `GetIntersectingTiles(Rectangle target)` | Grid positions of the tiles a rectangle overlaps |
-| `ResolveCollisionHorizontal(ref Rectangle rect, float velocityX)` | Pushes `rect` out of walls on the X axis |
-| `ResolveCollisionVertical(ref Rectangle rect, float velocityY)` | Pushes `rect` out of walls on the Y axis |
+| `GetCollisionRects()` | All solid rectangles, of every kind, already merged |
+| `GetCollisionRects(int kind)` | The merged rectangles of one kind, e.g. only walls. Empty if the kind isn't used. |
+| `Kinds` | Every kind used in the map |
+| `GetKindAt(Vector2 worldPosition)` | The kind of the tile at a world position, or `-1` if empty. For "what am I standing on?" |
+| `CheckCollision(CollisionRect collider, int? kind = null)` | `true` if the collider touches a solid tile (of `kind`, if given) |
+| `CheckCollision(Rectangle rectangle, int? kind = null)` | Same, for a plain `Rectangle` |
+| `GetIntersectingTiles(Rectangle target, int? kind = null)` | Grid positions of the solid tiles a rectangle overlaps |
+| `ResolveCollisionHorizontal(ref Rectangle rect, float velocityX, int? kind = null)` | Pushes `rect` out of solid tiles on the X axis |
+| `ResolveCollisionVertical(ref Rectangle rect, float velocityY, int? kind = null)` | Pushes `rect` out of solid tiles on the Y axis |
 | `Draw()` / `Draw(Rectangle visibleArea)` | Draws the map's tiles (debugging), same as [TileMap](#-tilemap) |
-| `DrawAllCollisionRects(Color color)` | Draws every collision rectangle (debugging) |
+| `DrawAllCollisionRects(Color color)` | Draws every merged rectangle (debugging) |
+| `DrawCollisionRects(int kind, Color color)` | Draws the merged rectangles of one kind (debugging) |
 
 > Move and resolve one axis at a time: apply X velocity → `ResolveCollisionHorizontal`, then Y velocity → `ResolveCollisionVertical`.
+
+```csharp
+const int Wall = 0, Ice = 1;
+collisionMap = new CollisionMap("tilemap", 16, 16, "collision.csv");
+
+// walls block the player and the light; ice is a floor the player walks over
+walls = collisionMap.GetCollisionRects(Wall).ToArray();
+lighting.AddOccluders(collisionMap.GetCollisionRects(Wall));
+
+// Update: slide on ice
+bool onIce = collisionMap.GetKindAt(player.Rect.Center) == Ice;
+```
+
+#### Kinds vs objects
+
+| It's a... | Example | Put it in |
+|---|---|---|
+| surface type: the same everywhere | wall, ice, mud | `CollisionMap`, one number per kind (merged per kind) |
+| thing with its own behavior or state | breakable block, door, retracting spikes | an [ObjectMap](#-objectmap) object with its own collider (never merged) |
 
 ---
 

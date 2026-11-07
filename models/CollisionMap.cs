@@ -1,108 +1,127 @@
 ﻿using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using System.Collections.Generic;
 
 namespace NodeTesting.models
 {
+    /// <summary>
+    /// A map used for collision instead of visuals. Every number 0 or above in its CSV is
+    /// solid, and the number is the tile's <b>kind</b> (e.g. 0 = wall, 1 = ice, 2 = mud).
+    /// Negative numbers (e.g. -1) are empty.
+    /// </summary>
+    /// <remarks>
+    /// When the map loads, touching tiles of the same kind are merged into as few rectangles
+    /// as possible, so a 40-tile wall is one <see cref="CollisionRect"/>, not 40. Tiles of
+    /// different kinds never merge with each other.
+    /// </remarks>
     public class CollisionMap : Map
     {
-        private List<CollisionRect> _collisionRects; // Store CollisionRect objects directly
+        private readonly List<CollisionRect> allRects = new List<CollisionRect>();
+        private readonly Dictionary<int, List<CollisionRect>> rectsByKind = new Dictionary<int, List<CollisionRect>>();
 
         public CollisionMap(string texturePath, int tileWidth, int tileHeight, string csvPath)
             : base(texturePath, tileWidth, tileHeight)
         {
             LoadCSV(csvPath);
-            _collisionRects = new List<CollisionRect>();
-            BuildCollisionRectangles();
+            BuildMergedRects();
         }
 
-        private void BuildCollisionRectangles()
-        {
-            for (int row = 0; row < MapHeight; row++)
-            {
-                for (int col = 0; col < MapWidth; col++)
-                {
-                    // 0 means solid collision (walls/borders)
-                    if (MapData[row, col] == 0)
-                    {
-                        // Calculate the center position of the tile
-                        int centerX = (col * TileWidth) + (TileWidth / 2);
-                        int centerY = (row * TileHeight) + (TileHeight / 2);
+        /// <summary>Every kind (number 0 or above) that appears in the map.</summary>
+        public IEnumerable<int> Kinds => rectsByKind.Keys;
 
-                        // Create a CollisionRect for this tile
-                        CollisionRect tileCollider = new CollisionRect(centerX, centerY, TileWidth, TileHeight);
-                        tileCollider.IsStatic = true;
-                        _collisionRects.Add(tileCollider);
-                    }
+        private void BuildMergedRects()
+        {
+            // Find every kind used in the map
+            var kinds = new SortedSet<int>();
+            foreach (int value in MapData)
+                if (value >= 0)
+                    kinds.Add(value);
+
+            foreach (int kind in kinds)
+            {
+                var rects = new List<CollisionRect>();
+
+                foreach (Rectangle tiles in TileMerger.Merge(MapData, kind))
+                {
+                    int pixelWidth = tiles.Width * TileWidth;
+                    int pixelHeight = tiles.Height * TileHeight;
+
+                    // CollisionRect takes a center
+                    var rect = new CollisionRect(
+                        tiles.X * TileWidth + pixelWidth / 2,
+                        tiles.Y * TileHeight + pixelHeight / 2,
+                        pixelWidth, pixelHeight) { IsStatic = true };
+
+                    rects.Add(rect);
+                    allRects.Add(rect);
                 }
+
+                rectsByKind[kind] = rects;
             }
+        }
+
+        /// <summary>All solid rectangles, of every kind, already merged.</summary>
+        public List<CollisionRect> GetCollisionRects() => allRects;
+
+        /// <summary>The merged rectangles of one kind, e.g. only walls or only ice. Empty if the kind isn't used.</summary>
+        public List<CollisionRect> GetCollisionRects(int kind) =>
+            rectsByKind.TryGetValue(kind, out var rects) ? rects : new List<CollisionRect>();
+
+        /// <summary>
+        /// The kind of the tile at a world position, or -1 if it's empty or outside the map.
+        /// Handy for "what am I standing on?", e.g. <c>GetKindAt(player.Feet) == Ice</c>.
+        /// </summary>
+        public int GetKindAt(Vector2 worldPosition)
+        {
+            int col = FloorDiv((int)System.MathF.Floor(worldPosition.X), TileWidth);
+            int row = FloorDiv((int)System.MathF.Floor(worldPosition.Y), TileHeight);
+
+            if (col < 0 || col >= MapWidth || row < 0 || row >= MapHeight)
+                return -1;
+
+            int value = MapData[row, col];
+            return value >= 0 ? value : -1;
         }
 
         /// <summary>
-        /// Checks if a CollisionRect collides with any collision tiles (0 values)
+        /// Whether the collider touches a solid tile. Pass <paramref name="kind"/> to only
+        /// check one kind (e.g. only walls); leave it out to check all of them.
         /// </summary>
-        public bool CheckCollision(CollisionRect collider)
+        public bool CheckCollision(CollisionRect collider, int? kind = null)
         {
-            foreach (CollisionRect tileRect in _collisionRects)
-            {
-                if (collider.Intersects(tileRect))
-                {
+            foreach (CollisionRect rect in RectsFor(kind))
+                if (collider.Intersects(rect))
                     return true;
-                }
-            }
+            return false;
+        }
+
+        /// <summary>Same as <see cref="CheckCollision(CollisionRect, int?)"/>, for a plain Rectangle.</summary>
+        public bool CheckCollision(Rectangle rectangle, int? kind = null)
+        {
+            foreach (CollisionRect rect in RectsFor(kind))
+                if (rectangle.Intersects(rect.Rect))
+                    return true;
             return false;
         }
 
         /// <summary>
-        /// Checks if a standard Rectangle collides with any collision tiles (0 values)
+        /// Grid positions of the solid tiles a rectangle overlaps. Pass <paramref name="kind"/>
+        /// to only count one kind.
         /// </summary>
-        public bool CheckCollision(Rectangle rectangle)
+        public List<Point> GetIntersectingTiles(Rectangle target, int? kind = null)
         {
-            // Create a temporary CollisionRect from the rectangle
-            CollisionRect tempCollider = new CollisionRect(
-                rectangle.Center.X,
-                rectangle.Center.Y,
-                rectangle.Width,
-                rectangle.Height
-            );
+            var intersections = new List<Point>();
 
-            return CheckCollision(tempCollider);
-        }
-
-        /// <summary>
-        /// Gets all collision rectangles for advanced collision handling
-        /// </summary>
-        public List<CollisionRect> GetCollisionRects()
-        {
-            return _collisionRects;
-        }
-
-        /// <summary>
-        /// Gets all tile positions that a rectangle intersects with
-        /// </summary>
-        public List<Point> GetIntersectingTiles(Rectangle target)
-        {
-            List<Point> intersections = new List<Point>();
-
-            // Calculate which tiles the rectangle overlaps
-            int leftTile = target.Left / TileWidth;
-            int rightTile = (target.Right - 1) / TileWidth;
-            int topTile = target.Top / TileHeight;
-            int bottomTile = (target.Bottom - 1) / TileHeight;
+            int leftTile = FloorDiv(target.Left, TileWidth);
+            int rightTile = FloorDiv(target.Right - 1, TileWidth);
+            int topTile = FloorDiv(target.Top, TileHeight);
+            int bottomTile = FloorDiv(target.Bottom - 1, TileHeight);
 
             for (int x = leftTile; x <= rightTile; x++)
             {
                 for (int y = topTile; y <= bottomTile; y++)
                 {
-                    // Check if within map bounds
-                    if (x >= 0 && x < MapWidth && y >= 0 && y < MapHeight)
-                    {
-                        // Check if this tile is a collision tile (0 in your case)
-                        if (MapData[y, x] == 0)
-                        {
-                            intersections.Add(new Point(x, y));
-                        }
-                    }
+                    if (x >= 0 && x < MapWidth && y >= 0 && y < MapHeight && IsSolid(MapData[y, x], kind))
+                        intersections.Add(new Point(x, y));
                 }
             }
 
@@ -110,68 +129,59 @@ namespace NodeTesting.models
         }
 
         /// <summary>
-        /// Resolves collision horizontally using the tile-based approach
+        /// Pushes <paramref name="rect"/> out of solid tiles on the X axis. Move and resolve
+        /// one axis at a time. Pass <paramref name="kind"/> to only collide with one kind.
         /// </summary>
-        public void ResolveCollisionHorizontal(ref Rectangle rect, float velocityX)
+        public void ResolveCollisionHorizontal(ref Rectangle rect, float velocityX, int? kind = null)
         {
-            List<Point> intersectingTiles = GetIntersectingTiles(rect);
-
-            foreach (Point tilePos in intersectingTiles)
+            foreach (Point tilePos in GetIntersectingTiles(rect, kind))
             {
-                Rectangle tileRect = new Rectangle(
-                    tilePos.X * TileWidth,
-                    tilePos.Y * TileHeight,
-                    TileWidth,
-                    TileHeight
-                );
+                Rectangle tileRect = new Rectangle(tilePos.X * TileWidth, tilePos.Y * TileHeight, TileWidth, TileHeight);
 
-                if (velocityX > 0) // Moving right
-                {
+                if (velocityX > 0)       // Moving right
                     rect.X = tileRect.Left - rect.Width;
-                }
-                else if (velocityX < 0) // Moving left
-                {
+                else if (velocityX < 0)  // Moving left
                     rect.X = tileRect.Right;
-                }
             }
         }
 
         /// <summary>
-        /// Resolves collision vertically using the tile-based approach
+        /// Pushes <paramref name="rect"/> out of solid tiles on the Y axis. Move and resolve
+        /// one axis at a time. Pass <paramref name="kind"/> to only collide with one kind.
         /// </summary>
-        public void ResolveCollisionVertical(ref Rectangle rect, float velocityY)
+        public void ResolveCollisionVertical(ref Rectangle rect, float velocityY, int? kind = null)
         {
-            List<Point> intersectingTiles = GetIntersectingTiles(rect);
-
-            foreach (Point tilePos in intersectingTiles)
+            foreach (Point tilePos in GetIntersectingTiles(rect, kind))
             {
-                Rectangle tileRect = new Rectangle(
-                    tilePos.X * TileWidth,
-                    tilePos.Y * TileHeight,
-                    TileWidth,
-                    TileHeight
-                );
+                Rectangle tileRect = new Rectangle(tilePos.X * TileWidth, tilePos.Y * TileHeight, TileWidth, TileHeight);
 
-                if (velocityY > 0) // Moving down
-                {
+                if (velocityY > 0)       // Moving down
                     rect.Y = tileRect.Top - rect.Height;
-                }
-                else if (velocityY < 0) // Moving up
-                {
+                else if (velocityY < 0)  // Moving up
                     rect.Y = tileRect.Bottom;
-                }
             }
         }
 
-        /// <summary>
-        /// Draws all collision rectangles for debugging purposes
-        /// </summary>
+        /// <summary>Draws every merged collision rectangle (debugging).</summary>
         public void DrawAllCollisionRects(Color color)
         {
-            foreach (CollisionRect collisionRect in _collisionRects)
-            {
-                collisionRect.Draw(color);
-            }
+            foreach (CollisionRect rect in allRects)
+                rect.Draw(color);
         }
+
+        /// <summary>Draws the merged rectangles of one kind (debugging).</summary>
+        public void DrawCollisionRects(int kind, Color color)
+        {
+            foreach (CollisionRect rect in GetCollisionRects(kind))
+                rect.Draw(color);
+        }
+
+        // ── Private helpers ────────────────────────────────────────────────────
+
+        private List<CollisionRect> RectsFor(int? kind) =>
+            kind.HasValue ? GetCollisionRects(kind.Value) : allRects;
+
+        private static bool IsSolid(int value, int? kind) =>
+            value >= 0 && (!kind.HasValue || value == kind.Value);
     }
 }

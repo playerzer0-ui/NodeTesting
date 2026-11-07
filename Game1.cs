@@ -40,6 +40,14 @@ namespace NodeTesting
 
         List<Tree> trees;
         List<Coin> coins;
+
+        // collision.csv kinds: -1 = empty, 0 = wall, 1 = ice
+        const int Wall = 0;
+        const int Ice = 1;
+        CollisionMap collisionMap;
+
+        Lighting lighting;
+        PointLight playerLight;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
@@ -93,11 +101,30 @@ namespace NodeTesting
             trees = placements.Spawn(1, position => new Tree(position));
             coins = placements.Spawn(2, position => new Coin(position));
 
-            // Everything the player bumps into, including each tree's trunk
+            // Lighting: a dark night, a warm light that follows the player,
+            // a small golden glow on every coin, and two colored lamps among the trees
+            lighting = new Lighting(canvas, GraphicsDevice) { Ambient = new Color(25, 25, 45) };
+            playerLight = lighting.Add(new PointLight(player.Pos, 180, new Color(255, 230, 190)));
+            foreach (Vector2 coinCell in placements.GetPositions(2))
+                lighting.Add(new PointLight(coinCell - new Vector2(0, 8), 28, new Color(255, 210, 90), 0.8f)
+                             { CastsShadows = false });   // tiny glows don't need shadows
+            lighting.Add(new PointLight(new Vector2(390, 130), 110, new Color(255, 140, 60)));   // orange lamp
+            lighting.Add(new PointLight(new Vector2(470, 210), 90, new Color(90, 150, 255)));    // blue lamp
+            lighting.Add(new PointLight(new Vector2(550, 420), 260, new Color(230, 230, 255)));  // lamp above the two walls
+
+            // Walls and ice painted as tiles; each kind is merged into a few big rectangles
+            collisionMap = new CollisionMap("tilemap", 16, 16, "collision.csv");
+
+            // Everything the player bumps into: each tree's trunk and the collision map's walls.
+            // Ice is a floor, so it isn't added: the player walks over it.
             var wallList = new List<ICollider> { WallRect, WallCircle };
             foreach (Tree tree in trees)
                 wallList.Add(tree.Wall);
+            wallList.AddRange(collisionMap.GetCollisionRects(Wall));
             walls = wallList.ToArray();
+
+            // The same walls and trunks block light
+            lighting.AddOccluders(walls);
 
             // Red: just a start and an end
             fewPoints = new Path2D(new List<Vector2> { new(100, 200), new(700, 200) }, speed: 600);
@@ -160,6 +187,11 @@ namespace NodeTesting
             tilemap.Update(gameTime);
             platform.Update(gameTime);
             player.Update(gameTime, walls);
+            playerLight.Position = player.Pos;
+
+            // Press L to switch lighting on and off
+            if (Globals.Input.KeyJustDown(Keys.L))
+                lighting.Enabled = !lighting.Enabled;
             foreach (Tree tree in trees)
                 tree.Update(player);
             foreach (Coin coin in coins)
@@ -176,6 +208,7 @@ namespace NodeTesting
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
 
             tilemap.Draw(camera.VisibleArea);
+            collisionMap.DrawCollisionRects(Ice, new Color(140, 210, 255));   // ice floor
             foreach (Coin coin in coins)
                 coin.Draw();
 
@@ -185,18 +218,27 @@ namespace NodeTesting
             foreach (Tree tree in trees)
                 if (tree.BaseY <= playerFeetY) tree.Draw();
 
-            player.Draw(Color.White);
+            // Tint the player light blue while standing on ice
+            bool onIce = collisionMap.GetKindAt(player.Rect.Center) == Ice;
+            player.Draw(onIce ? Color.LightBlue : Color.White);
 
             foreach (Tree tree in trees)
                 if (tree.BaseY > playerFeetY) tree.Draw();
 
             player.Rect.Draw(new Color(255, 0, 0, 128));
             stepHere.Draw(new Color(0, 0, 255, 128));
-            rectangle.Draw(Color.White);
+            //rectangle.Draw(Color.White);
             bubble.Draw();
             circle.Draw(Color.White);
             foreach (ICollider wall in walls)
                 wall.Draw(Color.Purple);
+
+            // Show how the collision map's walls were merged: each rectangle gets its own color
+            Color[] mergeColors = { Color.IndianRed, Color.Goldenrod, Color.MediumSeaGreen, Color.SteelBlue, Color.Orchid };
+            List<CollisionRect> wallRects = collisionMap.GetCollisionRects(Wall);
+            for (int i = 0; i < wallRects.Count; i++)
+                wallRects[i].Draw(mergeColors[i % mergeColors.Length]);
+
             platform.Draw();
 
             _spriteBatch.Draw(Globals.Pixel, new Rectangle((int)fewPoints.Position.X - 5, (int)fewPoints.Position.Y - 5, 10, 10), Color.Red);
@@ -233,6 +275,9 @@ namespace NodeTesting
 
             // draw world sprites here
             _spriteBatch.End();
+
+            // Darken the world and apply the lights (game layer only, not the UI)
+            lighting.Draw(_spriteBatch, camera.Transform());
 
             // 2. UI layer: 1920x1080 coordinates, stays crisp at any window size
             canvas.BeginUI(_spriteBatch);

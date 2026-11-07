@@ -56,7 +56,11 @@ public class Canvas
                   int uiWidth = 1920, int uiHeight = 1080)
     {
         _graphicsDevice = graphicsDevice;
-        _target = new RenderTarget2D(_graphicsDevice, width, height);
+        // PreserveContents: effects like Lighting briefly draw to another target mid-frame,
+        // and the game layer must still be there when they switch back
+        _target = new RenderTarget2D(_graphicsDevice, width, height, false,
+                                     SurfaceFormat.Color, DepthFormat.None, 0,
+                                     RenderTargetUsage.PreserveContents);
         UiWidth = uiWidth;
         UiHeight = uiHeight;
         SetDestinationRectangle();

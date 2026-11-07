@@ -155,7 +155,7 @@ namespace NodeTesting.models
         }
 
         // Integer division that rounds toward negative infinity, so areas left of / above 0 work
-        private static int FloorDiv(int value, int divisor) =>
+        protected static int FloorDiv(int value, int divisor) =>
             (int)System.Math.Floor((double)value / divisor);
     }
 }
