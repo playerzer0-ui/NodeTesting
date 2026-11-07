@@ -1,7 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System.Collections.Generic;
-using System.IO;
 
 namespace NodeTesting.models
 {
@@ -91,44 +90,9 @@ namespace NodeTesting.models
 
         protected void LoadCSV(string csvPath)
         {
-            string fullPath = FindFile(csvPath);
-            string[] lines = File.ReadAllLines(fullPath);
-            MapHeight = lines.Length;
-
-            string[] firstLine = lines[0].Split(',');
-            MapWidth = firstLine.Length;
-
-            MapData = new int[MapHeight, MapWidth];
-
-            for (int row = 0; row < MapHeight; row++)
-            {
-                string[] values = lines[row].Split(',');
-                for (int col = 0; col < MapWidth; col++)
-                {
-                    if (col < values.Length && int.TryParse(values[col].Trim(), out int value))
-                    {
-                        MapData[row, col] = value;
-                    }
-                }
-            }
-        }
-
-        private string FindFile(string fileName)
-        {
-            string[] paths = {
-                Path.Combine(Directory.GetCurrentDirectory(), fileName),
-                Path.Combine(Directory.GetCurrentDirectory(), "Content", fileName),
-                Path.Combine(Directory.GetParent(Directory.GetCurrentDirectory()).Parent.Parent.FullName, "Content", fileName),
-                fileName
-            };
-
-            foreach (string path in paths)
-            {
-                if (File.Exists(path))
-                    return path;
-            }
-
-            throw new FileNotFoundException($"Could not find file '{fileName}'");
+            MapData = CsvGrid.Load(csvPath);
+            MapHeight = MapData.GetLength(0);
+            MapWidth = MapData.GetLength(1);
         }
 
         /// <summary>

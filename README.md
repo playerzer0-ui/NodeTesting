@@ -20,6 +20,7 @@ All models live in the `NodeTesting.models` namespace.
 - Maps
   - [TileMap](#-tilemap)
   - [CollisionMap](#-collisionmap)
+  - [ObjectMap](#-objectmap)
 - Collision
   - [ICollider](#icollider)
   - [CollisionRect](#-collisionrect)
@@ -348,6 +349,36 @@ A map used for collision instead of visuals. In its CSV, **`0` means solid**. Ea
 | `DrawAllCollisionRects(Color color)` | Draws every collision rectangle (debugging) |
 
 > Move and resolve one axis at a time: apply X velocity → `ResolveCollisionHorizontal`, then Y velocity → `ResolveCollisionVertical`.
+
+---
+
+## 📍 ObjectMap
+
+A CSV map that **places objects instead of drawing tiles**. Each number stands for a kind of object (e.g. `1` = tree, `2` = coin), and `Spawn` creates your object at every cell with that number. The map draws nothing itself; the objects you create update and draw themselves, so they can have animations, colliders and their own logic.
+
+**public ObjectMap(string csvPath, int tileWidth, int tileHeight)**
+- csvPath: the placement CSV, looked up like [TileMap](#-tilemap)'s (mark it *Copy to Output Directory*). Empty cells can be `-1`.
+- tileWidth / tileHeight: size of one cell. Use your tilemap's tile size so objects line up with the tiles.
+
+| Member | Description |
+|---|---|
+| `Spawn<T>(int id, Func<Vector2, T> create)` | Calls `create` for every cell containing `id` (left to right, top to bottom) and returns the objects |
+| `GetPositions(int id)` | The positions of every cell containing `id` |
+| `Width`, `Height`, `PixelBounds` | Map size in cells / world pixels |
+
+Positions are the **bottom-center** of the cell: where something standing there touches the ground. Tall objects grow upward from it (set the sprite's `Origin` to its bottom-middle); for something centered in the cell, subtract half a tile from Y.
+
+```csharp
+// objects.csv:  -1 = empty, 1 = tree, 2 = coin
+var placements = new ObjectMap("objects.csv", 16, 16);
+List<Tree> trees = placements.Spawn(1, position => new Tree(position));
+List<Coin> coins = placements.Spawn(2, position => new Coin(position));
+
+// Update: foreach (var coin in coins) coin.Update(gameTime);
+// Draw:   foreach (var coin in coins) coin.Draw();
+```
+
+`Tree` and `Coin` in this repo are example objects: a tree with a trunk wall and a canopy that fades while the player is behind it, and a spinning coin using `SpriteAnimation`.
 
 ---
 

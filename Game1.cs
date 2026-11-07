@@ -37,6 +37,9 @@ namespace NodeTesting
 
         Path2D fewPoints;
         Path2D manyPoints;
+
+        List<Tree> trees;
+        List<Coin> coins;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
@@ -78,12 +81,23 @@ namespace NodeTesting
             tilemap = new TileMap("tilemap", 16, 16, "tilemap.csv");
             tilemap.RegisterAnimation(20, new int[] { 20, 21, 22, 23 }, 0.15f);
             tilemap.RegisterAnimation(28, new int[] { 28, 29, 30, 31 }, 0.15f);
-            camera.SetBounds(tilemap.PixelBounds);
+            //camera.SetBounds(tilemap.PixelBounds);
 
             WallRect = new CollisionRect(500, 500, 100, 100);
             WallCircle = new CollisionCircle(600, 500, 50);
             WallRect.IsStatic = true;
             WallCircle.IsStatic = true;
+
+            // Objects placed by a CSV: 1 = tree, 2 = coin
+            var placements = new ObjectMap("objects.csv", 16, 16);
+            trees = placements.Spawn(1, position => new Tree(position));
+            coins = placements.Spawn(2, position => new Coin(position));
+
+            // Everything the player bumps into, including each tree's trunk
+            var wallList = new List<ICollider> { WallRect, WallCircle };
+            foreach (Tree tree in trees)
+                wallList.Add(tree.Wall);
+            walls = wallList.ToArray();
 
             // Red: just a start and an end
             fewPoints = new Path2D(new List<Vector2> { new(100, 200), new(700, 200) }, speed: 600);
@@ -118,12 +132,6 @@ namespace NodeTesting
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            walls = new ICollider[]
-            {
-                WallRect,   // IsStatic = true
-                WallCircle  // IsStatic = true
-            };
-
             if (player.Rect.Intersects(stepHere))
             {
                 camera.MoveTo(new CameraFocus(rectangle.Center, targetZoom: 1f, transitionSpeed: 0.08f));
@@ -152,6 +160,10 @@ namespace NodeTesting
             tilemap.Update(gameTime);
             platform.Update(gameTime);
             player.Update(gameTime, walls);
+            foreach (Tree tree in trees)
+                tree.Update(player);
+            foreach (Coin coin in coins)
+                coin.Update(gameTime);
             bubble.Update(gameTime);
             camera.Update(gameTime);
             base.Update(gameTime);
@@ -164,7 +176,20 @@ namespace NodeTesting
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
 
             tilemap.Draw(camera.VisibleArea);
+            foreach (Coin coin in coins)
+                coin.Draw();
+
+            // Trees further up the screen than the player's feet are behind the player:
+            // draw them first. The rest are in front: draw them after the player.
+            float playerFeetY = player.Rect.Rect.Bottom;
+            foreach (Tree tree in trees)
+                if (tree.BaseY <= playerFeetY) tree.Draw();
+
             player.Draw(Color.White);
+
+            foreach (Tree tree in trees)
+                if (tree.BaseY > playerFeetY) tree.Draw();
+
             player.Rect.Draw(new Color(255, 0, 0, 128));
             stepHere.Draw(new Color(0, 0, 255, 128));
             rectangle.Draw(Color.White);
