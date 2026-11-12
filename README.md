@@ -18,6 +18,7 @@ Each section describes the model, then ends with **Scenarios**: common game situ
   - [Lighting & PointLight](#-lighting--pointlight)
 - Sprites
   - [Sprite](#sprite)
+  - [YSort (draw order)](#-ysort-draw-order)
   - [SpriteSheet](#spritesheet)
   - [SpriteAnimation](#-spriteanimation)
 - Maps
@@ -489,6 +490,7 @@ A single texture drawn at a position.
 |---|---|
 | `Pos` | Where the sprite is drawn. The texture's `Origin` lands on this point. |
 | `Origin` | The point of the texture placed at `Pos`. Defaults to the **center** of the texture. |
+| `Depth` | Draw order when the SpriteBatch uses `SpriteSortMode.FrontToBack`: higher is drawn on top. Set it with [`YSort.Depth(feetY)`](#-ysort-draw-order). Ignored in the default sort mode. |
 
 #### Scenarios
 
@@ -529,6 +531,35 @@ public class Crate : Sprite
 
 ---
 
+## ↕️ YSort (draw order)
+
+In a top-down game, things lower on screen are closer to the camera and should be drawn on top. Instead of ordering your draw calls by hand, give every standing sprite a `Depth` from its feet and let SpriteBatch sort them.
+
+**public static float YSort.Depth(float feetY)**: the depth for something standing at `feetY` (world pixels). Bigger Y gives a bigger depth, drawn later. No setup needed; it works for worlds up to a million pixels in each direction.
+
+`Sprite`, `SpriteSheet` and `SpriteAnimation` all have a `Depth` field.
+
+```csharp
+_spriteBatch.Begin(SpriteSortMode.FrontToBack, samplerState: SamplerState.PointClamp,
+                   transformMatrix: camera.Transform());
+
+player.Depth = YSort.Depth(player.FeetY);          // moving things: update every frame
+player.Draw(Color.White);
+
+foreach (var enemy in enemies) enemy.Draw();       // each sets its own Depth from its feet
+foreach (var tree in trees) tree.Draw();           // trees don't move: Depth set once when created
+
+_spriteBatch.End();   // sorted here: furthest back first, closest last
+```
+
+The order of the `Draw` calls doesn't matter; only `Depth` does. Sorting a few hundred sprites takes microseconds.
+
+> Use the **feet** (where it touches the ground), not the center: a tall tree and a short player have very different centers, but where they stand decides who's in front.
+
+> Flat things (floor tiles, items lying on the ground) don't need depths. Draw them in an earlier, normal `Begin()` so they're always underneath.
+
+---
+
 ## SpriteSheet
 
 A horizontal strip of equally sized frames in one texture.
@@ -541,6 +572,7 @@ A horizontal strip of equally sized frames in one texture.
 |---|---|
 | `FrameWidth`, `FrameHeight` | Size of one frame |
 | `Draw()` | Draws the sheet using its own settings |
+| `Depth` | Draw order with `SpriteSortMode.FrontToBack` (see [YSort](#-ysort-draw-order)) |
 | `DrawFrame(int index, Vector2 position)` | Draws one frame (0-based) |
 | `DrawFrame(int index, Vector2 position, float scale)` | …with a scale |
 | `DrawFrame(int index, Vector2 position, float scale, Color color)` | …with a scale and tint |
@@ -591,7 +623,7 @@ Frame-based animation from a **single-row strip**: one texture with equally size
 
 #### Fields
 
-`Position`, `Color`, `Scale`, `Rotation`, `Origin` and `SpriteEffect` control how it is drawn. `FrameIndex`, `IsFinished` and `IsReversed` hold the playback state.
+`Position`, `Color`, `Scale`, `Rotation`, `Origin`, `SpriteEffect` and `Depth` (see [YSort](#-ysort-draw-order)) control how it is drawn. `FrameIndex`, `IsFinished` and `IsReversed` hold the playback state.
 
 #### Methods
 

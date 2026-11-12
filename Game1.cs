@@ -269,27 +269,25 @@ namespace NodeTesting
             // ── Pass 2: standing things (characters, trees) ──────────────────────
             // Drawn after the lighting, each tinted by the light at its feet,
             // so the whole sprite is lit or dark together.
-            _spriteBatch.Begin(samplerState: SamplerState.PointClamp, transformMatrix: camera.Transform());
+            //
+            // FrontToBack + each sprite's Depth = y-sorting: draw them in any order and
+            // SpriteBatch sorts them by their feet at End(), lowest on screen drawn last (on top).
+            _spriteBatch.Begin(SpriteSortMode.FrontToBack, samplerState: SamplerState.PointClamp,
+                               transformMatrix: camera.Transform());
 
-            // Trees further up the screen than the player's feet are behind the player:
-            // draw them first. The rest are in front: draw them after the player.
-            float playerFeetY = player.Rect.Rect.Bottom;
             foreach (Tree tree in trees)
-                if (tree.BaseY <= playerFeetY) tree.Draw(lighting.GetLightAt(tree.BasePosition));
+                tree.Draw(lighting.GetLightAt(tree.BasePosition));   // each tree's Depth was set from its base
 
             // Light at the player's feet, tinted light blue while standing on ice
-            Color playerLight = lighting.GetLightAt(player.Rect.Center);
-            bool onIce = collisionMap.GetKindAt(player.Rect.Center) == Ice;
-            if (onIce)
-                playerLight = new Color(playerLight.ToVector3() * Color.LightBlue.ToVector3());
-            player.Draw(playerLight);
+            Color playerTint = lighting.GetLightAt(player.Rect.Center);
+            if (collisionMap.GetKindAt(player.Rect.Center) == Ice)
+                playerTint = new Color(playerTint.ToVector3() * Color.LightBlue.ToVector3());
+            player.Depth = YSort.Depth(player.Rect.Rect.Bottom);
+            player.Draw(playerTint);
 
-            foreach (Tree tree in trees)
-                if (tree.BaseY > playerFeetY) tree.Draw(lighting.GetLightAt(tree.BasePosition));
+            platform.Draw(lighting.GetLightAt(platform.Feet));        // sets its own Depth from its feet
 
-            platform.Draw(lighting.GetLightAt(platform.Feet));
-
-            _spriteBatch.End();
+            _spriteBatch.End();   // sorted here
 
             // 2. UI layer: 1920x1080 coordinates, stays crisp at any window size
             canvas.BeginUI(_spriteBatch);

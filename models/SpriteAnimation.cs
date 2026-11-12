@@ -15,6 +15,13 @@ namespace NodeTesting.models
         public Vector2 Origin;
         public float Rotation = 0f;
         public float Scale = 1f;
+
+        /// <summary>
+        /// Draw order when the SpriteBatch uses <c>SpriteSortMode.FrontToBack</c>: higher is drawn
+        /// later (on top). For top-down y-sorting set it from the feet: <c>Depth = YSort.Depth(feetY)</c>.
+        /// Ignored with the default sort mode, where things are drawn in call order.
+        /// </summary>
+        public float Depth = 0f;
         public SpriteEffects SpriteEffect;
 
         protected int FrameWidth;
@@ -100,7 +107,7 @@ namespace NodeTesting.models
         public void Draw()
         {
             Globals.spriteBatch.Draw(Texture, Position, Rectangles[FrameIndex], Color,
-                Rotation, Origin, Scale, SpriteEffect, 0f);
+                Rotation, Origin, Scale, SpriteEffect, Depth);
         }
 
         /// <summary>Draws a specific frame (0-based).</summary>
@@ -110,7 +117,7 @@ namespace NodeTesting.models
                 return;
 
             Globals.spriteBatch.Draw(Texture, Position, Rectangles[index], Color,
-                Rotation, Origin, Scale, SpriteEffect, 0f);
+                Rotation, Origin, Scale, SpriteEffect, Depth);
         }
 
         /// <summary>The source rectangle of the current frame in the texture.</summary>

@@ -39,6 +39,7 @@ namespace NodeTesting
         /// <param name="light">Tint, e.g. <c>lighting.GetLightAt(platform.Feet)</c>.</param>
         public void Draw(Color light)
         {
+            platform.Depth = YSort.Depth(Feet.Y);   // it moves, so update its draw order every frame
             platform.Draw(light);
         }
     }

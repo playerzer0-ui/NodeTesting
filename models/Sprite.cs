@@ -16,6 +16,13 @@ namespace NodeTesting.models
         protected float scale = 1f;
 
         /// <summary>
+        /// Draw order when the SpriteBatch uses <c>SpriteSortMode.FrontToBack</c>: higher is drawn
+        /// later (on top). For top-down y-sorting set it from the feet: <c>Depth = YSort.Depth(feetY)</c>.
+        /// Ignored with the default sort mode, where things are drawn in call order.
+        /// </summary>
+        public float Depth = 0f;
+
+        /// <summary>
         /// Gets the top-left position of the sprite in world space.
         /// </summary>
         public Vector2 Pos { get => pos; set => pos = value; }
@@ -47,7 +54,7 @@ namespace NodeTesting.models
         /// </param>
         public void Draw(Color color)
         {
-            Globals.spriteBatch.Draw(texture, pos, null, color, rotation, origin, scale, SpriteEffects.None, 0f);
+            Globals.spriteBatch.Draw(texture, pos, null, color, rotation, origin, scale, SpriteEffects.None, Depth);
         }
     }
 }

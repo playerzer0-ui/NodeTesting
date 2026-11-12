@@ -11,6 +11,13 @@ namespace NodeTesting.models
         protected Vector2 Origin;
         protected float Rotation = 0f;
         protected float Scale = 1f;
+
+        /// <summary>
+        /// Draw order when the SpriteBatch uses <c>SpriteSortMode.FrontToBack</c>: higher is drawn
+        /// later (on top). For top-down y-sorting set it from the feet: <c>Depth = YSort.Depth(feetY)</c>.
+        /// Ignored with the default sort mode, where things are drawn in call order.
+        /// </summary>
+        public float Depth = 0f;
         protected SpriteEffects SpriteEffect;
         protected Rectangle[] Rectangles;
         protected int frames;
@@ -39,13 +46,13 @@ namespace NodeTesting.models
         public void Draw()
         {
             Globals.spriteBatch.Draw(Texture, Position, Rectangles[frameIndex], Color,
-                Rotation, Origin, Scale, SpriteEffect, 0f);
+                Rotation, Origin, Scale, SpriteEffect, Depth);
         }
 
         public void DrawFrame(int index, Vector2 position)
         {
             Globals.spriteBatch.Draw(Texture, position, Rectangles[index], Color.White,
-                0f, Origin, 1f, SpriteEffects.None, 0f);
+                0f, Origin, 1f, SpriteEffects.None, Depth);
         }
 
         /// <summary>
@@ -57,7 +64,7 @@ namespace NodeTesting.models
         public void DrawFrame(int index, Vector2 position, float scale)
         {
             Globals.spriteBatch.Draw(Texture, position, Rectangles[index], Color.White,
-                0f, Origin, scale, SpriteEffects.None, 0f);
+                0f, Origin, scale, SpriteEffects.None, Depth);
         }
 
         /// <summary>
@@ -70,7 +77,7 @@ namespace NodeTesting.models
         public void DrawFrame(int index, Vector2 position, float scale, Color color)
         {
             Globals.spriteBatch.Draw(Texture, position, Rectangles[index], color,
-                0f, Origin, scale, SpriteEffects.None, 0f);
+                0f, Origin, scale, SpriteEffects.None, Depth);
         }
 
         /// <summary>
@@ -84,7 +91,7 @@ namespace NodeTesting.models
         public void DrawFrame(int index, Vector2 position, float rotation, float scale, SpriteEffects effects = SpriteEffects.None)
         {
             Globals.spriteBatch.Draw(Texture, position, Rectangles[index], Color.White,
-                rotation, Origin, scale, effects, 0f);
+                rotation, Origin, scale, effects, Depth);
         }
     }
 }

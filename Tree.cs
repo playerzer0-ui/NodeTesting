@@ -42,6 +42,7 @@ namespace NodeTesting
             // Draw the image so its bottom-middle sits on basePosition
             sprite = new Sprite("tree", basePosition);
             sprite.Origin = new Vector2(ImageWidth / 2f, ImageHeight);
+            sprite.Depth = YSort.Depth(y);   // trees don't move, so their draw order is set once
 
             // CollisionRect takes a center, so these are offset up from the base
             Wall = new CollisionRect(x, y - TrunkHeight / 2, TrunkWidth, TrunkHeight) { IsStatic = true };
